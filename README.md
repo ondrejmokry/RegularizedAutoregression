@@ -42,6 +42,9 @@ Special thank you goes to:
 ---
 
 [1] P. Záviška, P. Rajmic, A. Ozerov and L. Rencker, “A Survey and an Extensive Evaluation of Popular Audio Declipping Methods,” *IEEE Journal of Selected Topics in Signal Processing*, vol. 15, no. 1, pp. 5–24, 2021, doi: [10.1109/JSTSP.2020.3042071](https://doi.org/10.1109/JSTSP.2020.3042071).
+
 [2] P. Záviška, P. Rajmic and O. Mokrý, “Audio declipping performance enhancement via crossfading,” *Signal Processing*, vol. 192, 2022, doi: [10.1016/j.sigpro.2021.108365](https://doi.org/10.1016/j.sigpro.2021.108365).
+
 [3] A. Adler, V. Emiya, M. G. Jafari, M. Elad, R. Gribonval and M. D. Plumbley, “Audio Inpainting,” *IEEE Transactions on Audio, Speech, and Language Processing*, vol. 20, no. 3, pp. 922-932, 2012, doi: [10.1109/TASL.2011.2168211](https://doi.org/10.1109/TASL.2011.2168211).
+
 [4] İ. Bayram, “Proximal Mappings Involving Almost Structured Matrices,” *IEEE Signal Processing Letters*, vol. 22, no. 12, pp. 2264-2268, 2015, doi: [10.1109/LSP.2015.2476381](https://doi.org/10.1109/LSP.2015.2476381).
