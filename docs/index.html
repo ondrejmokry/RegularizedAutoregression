@@ -1,0 +1,223 @@
+---
+layout: default
+---
+
+<p>This is the accompanying page for the article <em>Regularized autoregressive modeling and its application to audio signal declipping</em> authored by Ondřej Mokrý and Pavel Rajmic, submitted to IEEE/ACM Transactions on Audio, Speech, and Language Processing.</p>
+<blockquote>
+<p>Autoregressive (AR) modeling is invaluable in signal processing, in particular in speech and audio fields. Attempts in the literature can be found that regularize or constrain either the time-domain signal values or the AR coefficients, which is done for various reasons, including the incorporation of prior information or numerical stabilization. Although these attempts are appealing, an encompassing and generic modeling framework is still missing. We propose such a framework and the related optimization problem and algorithm. We discuss the computational demands of the algorithm and explore the effects of various improvements on its convergence speed. In the experimental part, we demonstrate the usefulness of our approach on the audio declipping problem. We compare its performance against the state-of-the-art methods and demonstrate the competitiveness of the proposed method, especially for mildly clipped signals. The evaluation is extended by considering a heuristic algorithm of generalized linear prediction (GLP), a strong competitor which has only been presented as a patent and is new in the scientific community.</p>
+</blockquote>
+<p>The preprint is available at <a href="https://arxiv.org/abs/2410.17790">arXiv</a>.</p>
+
+<h1>Comparison of the methods</h1>
+
+<p>Below, we present the comparison of the regularized AR model with the methods from the survey <a href="#ref1">[1]</a>. This is a reproduction of Fig. 4 from the article.</p>
+
+<p>Results of the methods based on the AR model, treated in the article, are indicated with a background color. In the case of PEMO-Q and PEAQ, results using the “replace reliable” strategy from <a href="#ref2">[2]</a> are shown using stacked bars. For each algorithm which may produce signals inconsistent with the reliable samples, the cross-faded strategy is applied and the updated result is shown in lighter shade.</p>
+
+<p>Legend for the AR-based methods (shared for all the plots):</p>
+
+<img src="figures/sloupecky_legenda_1.svg">
+
+<p>Legend for the methods taken from the declipping survey <a href="#ref1">[1]</a>:</p>
+
+<img src="figures/sloupecky_legenda_2.svg">
+
+<h2>Comparison in terms of ∆SDR</h2>
+
+<p>Note that ∆SDR denotes the improvement of SDR over the clipped signal, i.e. over the input SDR.</p>
+
+<img src="figures/sloupecky_sdr.svg">
+
+<h2>Comparison in terms of PEMO-Q ODG</h2>
+
+<img src="figures/sloupecky_pemoq.svg">
+
+<h2>Comparison in terms of PEAQ ODG</h2>
+
+<img src="figures/sloupecky_peaq.svg">
+
+
+<h1>Audio examples</h1>
+
+<p>This section only includes the signals reconstructed using the AR-based methods discussed in the article (and without the “replace reliable” step).</p>
+
+<p>To listen to the references, please see the <a href="https://rajmic.github.io/declipping2020/">accompanying webpage</a> to <a href="#ref1">[1]</a> and <a href="#ref1">[2]</a>. Since the experiment protocol was identical, the examples are comparable.</p>
+
+<h3>Choose file</h3>
+
+<button id="tlacitko_1" class="clicked">a08_violin</button>
+<button id="tlacitko_2" class="cudlik">a16_clarinet</button>
+<button id="tlacitko_3" class="cudlik">a18_bassoon</button>
+<button id="tlacitko_4" class="cudlik">a25_harp</button>
+<button id="tlacitko_5" class="cudlik">a35_glockenspiel</button>
+<button id="tlacitko_6" class="cudlik">a41_celesta</button>
+<button id="tlacitko_7" class="cudlik">a42_accordion</button>
+<button id="tlacitko_8" class="cudlik">a58_guitar_sarasate</button>
+<button id="tlacitko_9" class="cudlik">a60_piano_schubert</button>
+<button id="tlacitko_10" class="cudlik">a66_wind_ensemble_stravinsky</button>
+
+<h3>Choose input SDR</h3>
+
+<button id="tlacitko_5dB" class="clicked">5 dB</button>
+<button id="tlacitko_7dB" class="cudlik">7 dB</button>
+<button id="tlacitko_10dB" class="cudlik">10 dB</button>
+<button id="tlacitko_15dB" class="cudlik">15 dB</button>
+
+<script>
+     let signalId = 0;
+     let clipId = 0;
+     let sdrs = [5, 7, 10, 15];
+
+    // Function that accepts an argument
+    function showAudio() {       
+        names = ["a08_violin", "a16_clarinet", "a18_bassoon", "a25_harp", "a35_glockenspiel", "a41_celesta", "a42_accordion", "a58_guitar_sarasate", "a60_piano_schubert", "a66_wind_ensemble_stravinsky"];
+        
+        // Intro text: audio file
+        const intro_file = document.getElementById("audio_intro_file");
+        intro_file.textContent = names[signalId];
+        
+        // Intro text: input SDR
+        const intro_sdr = document.getElementById("audio_intro_sdr");
+        intro_sdr.textContent = sdrs[clipId].toString() + " dB";
+        
+        // Clean audio
+        const clean_source = document.getElementById("audio_clean_source");
+        clean_source.src = "audio/" + names[signalId].substring(0, 3) + "_" + sdrs[clipId].toString().padStart(2, "0") + "_clean.wav";
+        const clean_player = document.getElementById("audio_clean_player");
+        clean_player.load();
+        
+        // Clipped audio
+        const clipped_source = document.getElementById("audio_clipped_source");
+        clipped_source.src = "audio/" + names[signalId].substring(0, 3) + "_" + sdrs[clipId].toString().padStart(2, "0") + "_clipped.wav";
+        const clipped_player = document.getElementById("audio_clipped_player");
+        clipped_player.load();
+        
+        // Reconstructed audio
+        ids = ["inp_10", "inp_20", "inp_30", "glp_10", "glp_20", "glp_30", "dec_11", "dec_21", "dec_31", "dec_12", "dec_22", "dec_32"];
+        for (let i = 0; i < 12; i++) {
+            const source = document.getElementById("audio_" + ids[i] + "_source");
+            source.src = "audio/" + names[signalId].substring(0, 3) + "_" + sdrs[clipId].toString().padStart(2, "0") + "_" + ids[i] + ".wav";
+            const player = document.getElementById("audio_" + ids[i] + "_player");
+            player.load();
+        }
+    }
+    
+    // Function that changes signal button style on click
+    function signalButtonClicked(id) {
+        const button = document.getElementById("tlacitko_" + (id+1).toString());
+        button.className = "clicked";
+        for (let i = 0; i < 10; i++) {
+            if (i != id) {
+                const button = document.getElementById("tlacitko_" + (i+1).toString());
+                button.className = "cudlik";
+            }
+        };
+    }
+    
+    // Function that changes input SDR button style on click
+    function sdrButtonClicked(id) {
+        const button = document.getElementById("tlacitko_" + sdrs[id].toString() + "dB");
+        button.className = "clicked";
+        for (let i = 0; i < 10; i++) {
+            if (i != id) {
+                const button = document.getElementById("tlacitko_" + sdrs[i].toString() + "dB");
+                button.className = "cudlik";
+            }
+        };
+    }
+
+    // Attach event listeners to the audio buttons
+    for (let i = 0; i < 10; i++) {
+        const button = document.getElementById("tlacitko_" + (i+1).toString());
+        button.addEventListener("click", function() {
+            signalId = i;
+            showAudio();
+            signalButtonClicked(i);
+        });
+    }
+    
+    // Attach event listeners to the input SDR buttons
+    for (let i = 0; i < 4; i++) {
+        const button = document.getElementById("tlacitko_" + sdrs[i].toString() + "dB");
+        button.addEventListener("click", function() {
+            clipId = i;
+            showAudio();
+            sdrButtonClicked(i);
+        });
+    }
+    
+</script>
+
+<p>Chosen audio file: <strong><span id=audio_intro_file>a08_violin</span></strong></p>
+<p>Chosen input SDR: <strong><span id=audio_intro_sdr>5 dB</span></strong></p>
+
+<table>
+    <tr>
+        <td>Clean</td>
+        <td><audio controls id=audio_clean_player><source id=audio_clean_source src="audio/a08_05_clean.wav"></audio></td>
+    </tr>
+    <tr>
+        <td>Clipped</td>
+        <td><audio controls id=audio_clipped_player><source id=audio_clipped_source src="audio/a08_05_clipped.wav"></audio></td>
+    </tr>
+</table>
+
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+<table>
+    <tr>
+        <th rowspan="2"></th>
+        <th rowspan="2">inpainting</th>
+        <th rowspan="2">GLP</th>
+        <th colspan="2">declipping</th>
+    </tr>
+    <tr>
+        <th>\(\lambda_S = 10\)</th>
+        <th>\(\lambda_S = \infty\)</th>
+    </tr>
+    <tr>
+        <th>\(\lambda_C = 0\)</th>
+        <td><audio controls id=audio_inp_10_player><source id=audio_inp_10_source src="audio/a08_05_inp_10.wav"></audio></td>
+        <td><audio controls id=audio_glp_10_player><source id=audio_glp_10_source src="audio/a08_05_glp_10.wav"></audio></td>
+        <td><audio controls id=audio_dec_11_player><source id=audio_dec_11_source src="audio/a08_05_dec_11.wav"></audio></td>
+        <td><audio controls id=audio_dec_12_player><source id=audio_dec_12_source src="audio/a08_05_dec_12.wav"></audio></td>
+    </tr>
+    <tr>
+        <th>\(\lambda_C = 10^{-5}\)</th>
+        <td><audio controls id=audio_inp_20_player><source id=audio_inp_20_source src="audio/a08_05_inp_20.wav"></audio></td>
+        <td><audio controls id=audio_glp_20_player><source id=audio_glp_20_source src="audio/a08_05_glp_20.wav"></audio></td>
+        <td><audio controls id=audio_dec_21_player><source id=audio_dec_21_source src="audio/a08_05_dec_21.wav"></audio></td>
+        <td><audio controls id=audio_dec_22_player><source id=audio_dec_22_source src="audio/a08_05_dec_22.wav"></audio></td>
+    </tr>
+    <tr>
+        <th>\(\lambda_C = 10^{-3}\)</th>
+        <td><audio controls id=audio_inp_30_player><source id=audio_inp_30_source src="audio/a08_05_inp_30.wav"></audio></td>
+        <td><audio controls id=audio_glp_30_player><source id=audio_glp_30_source src="audio/a08_05_glp_30.wav"></audio></td>
+        <td><audio controls id=audio_dec_31_player><source id=audio_dec_31_source src="audio/a08_05_dec_31.wav"></audio></td>
+        <td><audio controls id=audio_dec_32_player><source id=audio_dec_32_source src="audio/a08_05_dec_32.wav"></audio></td>
+    </tr>
+</table>
+
+<h3>Remarks</h3>
+<ul>
+    <li>GLP stands for the generalized linear prediction by Atlas and Clark <a href="#ref3">[3]</a>
+    <li>\(\lambda_C = 0\) denotes no regularization of the AR model, i.e. it represents the inpainting method by Janssen, Veldhuis and Vries <a href="#ref4">[4]</a> and the original GLP method <a href="#ref3">[3]</a>
+    <li>\(\lambda_S = 0\) and \(\lambda_S = \infty\) distinguish between two options for the signal constraint (consistency with the clipping model); \(\lambda_S = \infty\) is the only option from the presented options that is fully consistent
+</ul>
+
+<h1>References</h1>
+
+<ol>
+    <li id=ref1>
+    P. Záviška, P. Rajmic, A. Ozerov, and L. Rencker, “A survey and an extensive evaluation of popular audio declipping methods,” <i>IEEE Journal of Selected Topics in Signal Processing</i>, vol. 15, no. 1, pp. 5–24, 2021. DOI: <a href=https://doi.org/10.1109/JSTSP.2020.3042071>10.1109/JSTSP.2020.3042071</a>
+    </li>
+    <li id=ref2>
+    P. Záviška, P. Rajmic, and O. Mokrý, “Audio declipping performance enhancement via crossfading,” <i>Signal Processing</i>, vol. 192, 2022. DOI: <a href=https://doi.org/10.1016/j.sigpro.2021.108365>10.1016/j.sigpro.2021.108365</a>
+    </li>
+    <li id=ref3>
+    L. Atlas and P. Clark, “Clipped-waveform repair in acoustic signals using generalized linear prediction,” U.S. patentus US 8 126 578 B2, 2012. [Online]. Available: <a href="https://patents.google.com/patent/US8126578">https://patents.google.com/patent/US8126578</a>
+    </li>
+    <li id=ref4>
+    A. J. E. M. Janssen, R. N. J. Veldhuis, and L. B. Vries, “Adaptive interpolation of discrete-time signals that can be modeled as autoregressive processes,” <i>IEEE Transactions on Acoustics, Speech and Signal Processing</i>, vol. 34, no. 2, pp. 317–330, 1986. DOI: <a href="https://doi.org/10.1109/TASSP.1986.1164824">10.1109/TASSP.1986.1164824</a>
+    </li>
+</ol>
