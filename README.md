@@ -6,6 +6,8 @@ This is an accompanying repository for the article *Regularized autoregressive m
 
 The submitted manuscript is available at [arXiv](https://arxiv.org/abs/2410.17790).
 
+Accompanying webpage with examples for listening is available through [GitHub pages](https://ondrejmokry.github.io/RegularizedAutoregression/).
+
 ## Contents of the repository
 
 The repository contains MATLAB implementation of all the methods and experiments described in the article.
