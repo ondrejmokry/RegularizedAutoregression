@@ -1,4 +1,4 @@
-function restored = segmentation(method,signal,masks,lambda,p,maxit,varargin)
+function restored = segmentation(method, signal, masks, lambda, p, maxit, options)
 % segmentation performs segment-wise processing of audio using the Janssen
 % algorithm or its variations:
 % (1) inpainting using the Janssen algorithm [1] with sparse regularization
@@ -17,128 +17,139 @@ function restored = segmentation(method,signal,masks,lambda,p,maxit,varargin)
 %
 % [1] A. Janssen, R. Veldhuis and L. Vries, "Adaptive interpolation of
 %     discrete-time signals that can be modeled as autoregressive
-%     processes," in IEEE Transactions on Acoustics, Speech, and Signal
+%     processes, " in IEEE Transactions on Acoustics, Speech, and Signal
 %     Processing, vol. 34, no. 2, pp. 317-330, 1986, doi:
 %     10.1109/TASSP.1986.1164824.
 % [2] L. Atlas and C. P. Clark, "Clipped-waveform repair in acoustic
-%     signals using generalized linear prediction," US patent US8126578B2,
+%     signals using generalized linear prediction, " US patent US8126578B2, 
 %     2007.
 % [3] A. Adler, V. Emiya, M. G. Jafari, M. Elad, R. Gribonval and M. D.
-%     Plumbley, "Audio Inpainting," in IEEE Transactions on Audio, Speech,
+%     Plumbley, "Audio Inpainting, " in IEEE Transactions on Audio, Speech, 
 %     and Language Processing, vol. 20, no. 3, pp. 922-932, 2012, doi:
 %     10.1109/TASL.2011.2168211.
 % [4] P. Combettes and J.-C. Pesquet, "Proximal Splitting Methods in Signal
-%     Processing," in Fixed-Point Algorithms for Inverse Problems in
+%     Processing, " in Fixed-Point Algorithms for Inverse Problems in
 %     Science and Engineering, vol. 49, pp. 185-212, 2009, doi:
 %     10.1007/978-1-4419-9569-8_10.
-% [5] I. Bayram, "Proximal Mappings Involving Almost Structured Matrices,"
-%     in IEEE Signal Processing Letters, vol. 22, no. 12, pp. 2264-2268,
+% [5] I. Bayram, "Proximal Mappings Involving Almost Structured Matrices, "
+%     in IEEE Signal Processing Letters, vol. 22, no. 12, pp. 2264-2268, 
 %     2015, doi: 10.1109/LSP.2015.2476381.
-%
-% input arguments
-%   method        switch between the algorithms (1)-(3)
-%                 (1) 'inpainting'
-%                 (2) 'declipping'
-%                 (3) 'glp'
-%   signal        the input (degraded) signal
-%   masks.R       mask of the reliable samples
-%        .U       mask of the samples clipped on the upper clipping level,
-%                 needed only for (2), (3)
-%        .L       mask of the samples clipped on the lower clipping level,
-%                 needed only for (2), (3)
-%   lambda        regularization parameters:
-%                 lambda(1) ... for the AR model estimation, if
-%                               lambda(1) = 0, no regularization is used
-%                 lambda(2) ... for the signal estimation, if lambda(2) = 0
-%                               or length(lambda) = 1, the indicator
-%                               function is used instead of the distance
-%                               function
-%   p             order of the AR model
-%   maxit         number of iterations of the whole Janssen algorithm
-%   varargin      name-value pairs
-%                 'wtype' ('sine')     window shape for overlap-add
-%                 'w' (4096)           window length for overlap-add
-%                 'a' (2048)           window shift for overlap-add
-%                 'coefaccel' (false)  accelerate the coef. estimation
-%                 'coefextra' (false)  accelerate the signal estimation
-%                 'sigaccel' (false)   extrapolate the signal
-%                 'sigextra' (false)   extrapolate the coefficients
-%                 'linesearch' (false) search for the coefficients and the
-%                                      signal using the linesearch strategy
-%                                      and the current and previous
-%                                      solutions
-%                 'saveall' (false)    save the solution during iterations
-%                 'DRmaxit' (1000)     number of iterations for the solver
-%                                      of the subproblems; if the parameter
-%                                      is set to non-numeric value,
-%                                      progressive strategy is applied with
-%                                      100 iterations of DR in the first
-%                                      iteration of Janssen and 1000
-%                                      iterations of DR in the last
-%                                      iteration of Janssen
-%                  'mat' ('toeplitz')  how to build the matrices needed for
-%                                      the subproblems, accepted values are
-%                                      'toeplitz', 'xcorr', 'conv', 'fft'
-%                  'decompose' (true)  use the Cholesky decomposition to
-%                                      substitute for the multiplication
-%                                      with matrix inversion in the
-%                                      non-accelerated DR algorithm
-%                  'gammaC' (0.1)      parameter of the DR algorithm for
-%                                      coef. estimation
-%                  'gammaS' (10)       parameter of the DR algorithm for
-%                                      signal estimation
-%                  'verbose' (true)    print number of the segment being
-%                                      processed
 %
 % output arguments
 %   restored      the solution; if saveall is true, restored is of size
 %                 length(signal) x maxit, or length(signal) x 1 otherwise
 %
-% Date: 21/07/2021
 % By Ondrej Mokry
 % Brno University of Technology
-% Contact: ondrej.mokry@mensa.cz
-%
-% edit 13/09/2022:
-%    changed the behavior for 'rect' window shape
+% Contact: ondrej.mokry@vut.cz
 
-%% parse the inputs for overlap-add
-% create the parser
-pars = inputParser;
-pars.KeepUnmatched = true;
+arguments
+    % Switch between the algorithms (1)-(3):
+    % (1) "inpainting"
+    % (2) "declipping"
+    % (3) "glp"
+    method (1,1) string {mustBeMember(method, ["inpainting", "declipping", "glp"])}
+    
+    % The input (degraded) signal
+    signal (:,1) double
+    
+    % Masks:
+    % masks.R ... mask of the reliable samples
+    % masks.U ... mask of the samples clipped on the upper clipping level (needed only for (2), (3))
+    % masks.L ... mask of the samples clipped on the lower clipping level (needed only for (2), (3))
+    masks struct
+    
+    % Regularization parameters:
+    % lambda(1) ... for the AR model estimation, if lambda(1) = 0, no regularization is used
+    % lambda(2) ... for the signal estimation, if lambda(2) = Inf or length(lambda) = 1,
+    %               the indicator function is used instead of the distance function
+    lambda (1,:) double
+    
+    % Order of the AR model
+    p (1,1) double {mustBePositive}
+    
+    % Number of iterations of the whole Janssen algorithm
+    maxit (1,1) double {mustBePositive}
+    
+    % Optional name-value pairs for segmentation:
+    % Window shape for overlap-add
+    options.wtype (1,1) string = 'sine'
 
-% add optional name-value pairs
-addParameter(pars,'wtype','sine')
-addParameter(pars,'w',4096)
-addParameter(pars,'a',2048)
-addParameter(pars,'saveall',false)
-addParameter(pars,'verbose',true)
+    % Window length for overlap-add
+    options.w (1,1) double = 4096
+    
+    % Window shift for overlap-add
+    options.a (1,1) double = 2048
+    
+    % Save the solution during iterations    
+    options.saveall (1,1) logical = false
 
-% parse
-parse(pars, varargin{:})
+    % Print number of the segment being processed
+    options.verbose (1,1) logical = true
 
-% save the parsed results to nice variables
-wtype      = pars.Results.wtype;
-w          = pars.Results.w;
-a          = pars.Results.a;
-saveall    = pars.Results.saveall;
-verbose    = pars.Results.verbose;
+    % Optional name-value pairs for janssen function:
+    % Accelerate the coefficient estimation
+    options.coefaccel (1,1) logical = false
+    
+    % Extrapolate the coefficients
+    options.coefextra (1,1) logical = false
+    
+    % Accelerate the signal estimation
+    options.sigaccel (1,1) logical = false
+    
+    % Extrapolate the signal
+    options.sigextra (1,1) logical = false
+    
+    % Search for the coefficients and the signal using the linesearch strategy
+    % and the current and previous solutions
+    options.linesearch (1,1) logical = false
+    
+    % Number of iterations for the solver of the subproblems; if the parameter
+    % is set to a non-numeric value, progressive strategy is applied with
+    % 100 iterations of DR in the first iteration of Janssen and 1000
+    % iterations of DR in the last iteration of Janssen
+    options.DRmaxit (1,1) double {mustBePositive} = 1000
+    
+    % How to build the matrices needed for the subproblems, accepted values are:
+    % "toeplitz", "xcorr", "conv", "fft"
+    options.mat (1,1) string {mustBeMember(options.mat, ["toeplitz", "xcorr", "conv", "fft"])} = "toeplitz"
+    
+    % Use the Cholesky decomposition to substitute for the multiplication
+    % with matrix inversion in the non-accelerated DR algorithm
+    options.decompose (1,1) logical = true
+    
+    % Parameter of the DR algorithm for coefficient estimation
+    options.gammaC (1,1) double {mustBePositive} = 0.1
+    
+    % Parameter of the DR algorithm for signal estimation
+    options.gammaS (1,1) double {mustBePositive} = 10
+    
+    % Plot additional linesearch graphs
+    options.plotLS (1,1) logical = false
+end
+
+% Extract options to variables for compatibility with existing code
+wtype   = options.wtype;
+w       = options.w;
+a       = options.a;
+saveall = options.saveall;
+verbose = options.verbose;
 
 %% padding the signal
 % L is divisible by a and minimum amount of zeros equals gl (window length)
 % zeros will be appended to avoid periodization of nonzero samples
 L       = ceil(length(signal)/a)*a + (ceil(w/a)-1)*a;
 S       = L/a; % number of signal segments
-data    = [signal;  zeros(L-length(signal),1)];
+data    = [signal;  zeros(L-length(signal), 1)];
 masks.R = [masks.R; true(L-length(signal), 1)];
-masks.U = [masks.U; false(L-length(signal),1)];
-masks.L = [masks.L; false(L-length(signal),1)];
+masks.U = [masks.U; false(L-length(signal), 1)];
+masks.L = [masks.L; false(L-length(signal), 1)];
 
 %% initializing the solution array
 if saveall
-    mrestored = zeros(w,maxit,S);
+    mrestored = zeros(w, maxit, S);
 else
-    mrestored = zeros(w,S);
+    mrestored = zeros(w, S);
 end
 
 %% construction of analysis and synthesis windows
@@ -156,60 +167,60 @@ else
 end
 
 %% segment settings
-mdata = NaN(w,S);
-mR = false(w,S);
-mL = false(w,S);
-mU = false(w,S);
+mdata = NaN(w, S);
+mR = false(w, S);
+mL = false(w, S);
+mU = false(w, S);
 for s = 1:S
     % defining the indices of the current block
     indices = 1 + (s-1)*a - floor(w/2) : (s-1)*a + ceil(w/2);
     indices = 1 + mod(indices-1, L);
     
     % defining the segment data and masks
-    mdata(:,s) = data(indices) .* gana;
-    mR(:,s) = masks.R(indices);
-    mL(:,s) = masks.L(indices);
-    mU(:,s) = masks.U(indices);
+    mdata(:, s) = data(indices) .* gana;
+    mR(:, s) = masks.R(indices);
+    mL(:, s) = masks.L(indices);
+    mU(:, s) = masks.U(indices);
 end
 
 %% segment processing via parfor
 if saveall
     parfor s = 1:S
         if verbose
-            fprintf('Processing segment %d of %d...\n',s,S)
+            fprintf('Processing segment %d of %d...\n', s, S)
         end
-        smasks = struct('R',mR(:,s),'L',mL(:,s),'U',mU(:,s));   
-        mrestored(:,:,s) = janssen(method,mdata(:,s),smasks,lambda,p,maxit,...
-            varargin{:}); %#ok<*PFBNS>
+        smasks = struct('R', mR(:, s), 'L', mL(:, s), 'U', mU(:, s));   
+        mrestored(:, :, s) = janssen(method, mdata(:, s), smasks, lambda, p, maxit, ...
+            options); %#ok<*PFBNS>
     end
 else
     parfor s = 1:S
         if verbose
-            fprintf('Processing segment %d of %d...\n',s,S)
+            fprintf('Processing segment %d of %d...\n', s, S)
         end
-        smasks = struct('R',mR(:,s),'L',mL(:,s),'U',mU(:,s));   
-        mrestored(:,s) = janssen(method,mdata(:,s),smasks,lambda,p,maxit,...
-            varargin{:});
+        smasks = struct('R', mR(:, s), 'L', mL(:, s), 'U', mU(:, s));   
+        mrestored(:, s) = janssen(method, mdata(:, s), smasks, lambda, p, maxit, ...
+            options);
     end
 end
 
 %% overlap-add
 if saveall
-    restored = zeros(L,maxit);
+    restored = zeros(L, maxit);
 else
-    restored = zeros(L,1);
+    restored = zeros(L, 1);
 end
 for s = 1:S
     indices = 1 + (s-1)*a - floor(w/2) : (s-1)*a + ceil(w/2);
     indices = 1 + mod(indices-1, L);
     if saveall
-        restored(indices,:) = restored(indices,:) + mrestored(:,:,s).*repmat(gsyn,1,maxit);
+        restored(indices, :) = restored(indices, :) + mrestored(:, :, s).*repmat(gsyn, 1, maxit);
     else
-        restored(indices) = restored(indices) + mrestored(:,s).*gsyn;
+        restored(indices) = restored(indices) + mrestored(:, s).*gsyn;
     end
 end
 
 %% cropping the solution to the original length
-restored = restored(1:length(signal),:);
+restored = restored(1:length(signal), :);
 
 end

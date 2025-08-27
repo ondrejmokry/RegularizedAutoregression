@@ -1,5 +1,5 @@
-function [restored, objective, times] = janssen(method, signal, masks, lambda, p, maxit, varargin)
-% janssen is a function that wraps three closely related reconstruction
+function [restored, objective, times] = janssen(method, signal, masks, lambda, p, maxit, options)
+% janssen is a function that wraps four closely related reconstruction
 % algorithms for audio declipping/inpainting:
 % (1) inpainting using the Janssen algorithm [1] with sparse regularization
 %     of the AR coefficients
@@ -7,12 +7,15 @@ function [restored, objective, times] = janssen(method, signal, masks, lambda, p
 %     of the AR coefficients and consistency constraints on the signal
 % (3) declipping using the generalized linear prediction [2] with sparse
 %     regularization of the AR coefficients
+% (4) dequantization using the Janssen algorithm [1] with sparse 
+%     regularization of the AR coefficients and consistency constraints on 
+%     the signal
 %
 % implementation of the signal estimation step in (1) and (3) is taken from
 % the Audio Inpainting Toolbox as described in [3]
 %
-% the subproblems of estimating the AR coefficients in (1)-(3) and
-% estimating the signal in (2) are solved using the Douglas-Rachford
+% the subproblems of estimating the AR coefficients in (1)–(4) and
+% the signal in (2) and (4) are solved using the Douglas–Rachford
 % algorithm [4], which is possibly accelerated as described in [5]
 %
 % [1] A. Janssen, R. Veldhuis and L. Vries, "Adaptive interpolation of
@@ -24,7 +27,7 @@ function [restored, objective, times] = janssen(method, signal, masks, lambda, p
 %     signals using generalized linear prediction," US patent US8126578B2, 
 %     2007.
 % [3] A. Adler, V. Emiya, M. G. Jafari, M. Elad, R. Gribonval and M. D.
-%     Plumbley,"Audio Inpainting, " in IEEE Transactions on Audio, Speech, 
+%     Plumbley, "Audio Inpainting, " in IEEE Transactions on Audio, Speech, 
 %     and Language Processing, vol. 20, no. 3, pp. 922-932, 2012, doi:
 %     10.1109/TASL.2011.2168211.
 % [4] P. Combettes and J.-C. Pesquet, "Proximal Splitting Methods in Signal
@@ -35,153 +38,146 @@ function [restored, objective, times] = janssen(method, signal, masks, lambda, p
 %     in IEEE Signal Processing Letters, vol. 22, no. 12, pp. 2264-2268, 
 %     2015, doi: 10.1109/LSP.2015.2476381.
 %
-% input arguments
-%   method        switch between the algorithms (1)-(3)
-%                 (1) "inpainting"
-%                 (2) "declipping"
-%                 (3) "glp"
-%   signal        the input (degraded) signal
-%   masks.R       mask of the reliable samples
-%        .U       mask of the samples clipped on the upper clipping level, 
-%                 needed only for (2), (3)
-%        .L       mask of the samples clipped on the lower clipping level, 
-%                 needed only for (2), (3)
-%   lambda        regularization parameters:
-%                 lambda(1) ... for the AR model estimation, if
-%                               lambda(1) = 0, no regularization is used
-%                 lambda(2) ... for the signal estimation,
-%                               if lambda(2) = Inf or length(lambda) = 1,
-%                               the indicator function is used instead of
-%                               the distance function
-%   p             order of the AR model
-%   maxit         number of iterations of the whole Janssen algorithm
-%   varargin      name-value pairs
-%                 "coefaccel" (false)  accelerate the coef. estimation
-%                 "coefextra" (false)  extrapolate the coefficients
-%                 "sigaccel" (false)   accelerate the signal estimation
-%                 "sigextra" (false)   extrapolate the signal
-%                 "linesearch" (false) search for the coefficients and the
-%                                      signal using the linesearch strategy
-%                                      and the current and previous
-%                                      solutions
-%                 "plotLS" (false)     plot additional linesearch graphs
-%                 "saveall" (false)    save the solution during iterations
-%                 "DRmaxit" (1000)     number of iterations for the solver
-%                                      of the subproblems; if the parameter
-%                                      is set to non-numeric value, 
-%                                      progressive strategy is applied with
-%                                      100 iterations of DR in the first
-%                                      iteration of Janssen and 1000
-%                                      iterations of DR in the last
-%                                      iteration of Janssen
-%                  "mat" ("toeplitz")  how to build the matrices needed for
-%                                      the subproblems, accepted values are
-%                                      "toeplitz", "xcorr", "conv", "fft"
-%                  "decompose" (true)  use the Cholesky decomposition to
-%                                      substitute for the multiplication
-%                                      with matrix inversion in the
-%                                      non-accelerated DR algorithm
-%                  "gammaC" (0.1)      parameter of the DR algorithm for
-%                                      coef. estimation
-%                  "gammaS" (10)       parameter of the DR algorithm for
-%                                      signal estimation
-%                  "verbose" (false)   print current iteration
-%
 % output arguments
 %   restored      the solution; if saveall is true, restored is of size
 %                 length(signal) x maxit, or length(signal) x 1 otherwise
 %   objective     values of the objective function during iterations
 %   times         cumulative computation time during iterations
 %
-% Date: 02/07/2021
 % By Ondrej Mokry
 % Brno University of Technology
-% Contact: ondrej.mokry@mensa.cz
+% Contact: ondrej.mokry@vut.cz
 
-%% parse the inputs
-% create the parser
-pars = inputParser;
-pars.KeepUnmatched = true;
+arguments
+    % Switch between the algorithms (1)–(3):
+    % (1) "inpainting"
+    % (2) "declipping"
+    % (3) "glp"
+    % (4) "dequantization"
+    method (1,1) string {mustBeMember(method, ["inpainting", "declipping", "glp", "dequantization"])}
+    
+    % The input (degraded) signal
+    signal (:,1) double
+    
+    % Masks:
+    % masks.R ... mask of the reliable samples
+    % masks.U ... mask of the samples clipped on the upper clipping level (needed only for (2), (3))
+    % masks.L ... mask of the samples clipped on the lower clipping level (needed only for (2), (3))
+    masks struct
+    
+    % Regularization parameters:
+    % lambda(1) ... for the AR model estimation, if lambda(1) = 0, no regularization is used
+    % lambda(2) ... for the signal estimation, if lambda(2) = Inf or length(lambda) = 1,
+    %               the indicator function is used instead of the distance function
+    lambda (1,:) double
+    
+    % Order of the AR model
+    p (1,1) double {mustBePositive}
+    
+    % Number of iterations of the whole Janssen algorithm
+    maxit (1,1) double {mustBePositive}
+    
+    %% Optional quantization step
+    options.delta (1,1) double {mustBePositive} = Inf
 
-% add optional name-value pairs
-addParameter(pars, "coefaccel", false)
-addParameter(pars, "coefextra", false)
-addParameter(pars, "sigaccel", false)
-addParameter(pars, "sigextra", false)
-addParameter(pars, "linesearch", false)
-addParameter(pars, "saveall", false)
-addParameter(pars, "DRmaxit", 1000)
-addParameter(pars, "mat", "toeplitz")
-addParameter(pars, "decompose", true)
-addParameter(pars, "gammaC", 0.1)
-addParameter(pars, "gammaS", 10)
-addParameter(pars, "plotLS", false)
-addParameter(pars, "verbose", false)
+    %% Optional name-value pairs for segmentation
+    % Segment or not
+    options.segmentation (1,1) logical = false
 
-% parse
-parse(pars, varargin{:})
+    % Window shape for overlap-add
+    options.wtype (1,1) string = 'rect'
+
+    % Window length for overlap-add
+    options.w (1,1) double = 4096
+    
+    % Window shift for overlap-add
+    options.a (1,1) double = 2048
+
+    %% Optional name-value pairs for outputs
+    % Save the solution during iterations
+    options.saveall (1,1) logical = false
+
+    % Plot additional linesearch graphs
+    options.plotLS (1,1) logical = false
+    
+    % Print current iteration
+    options.verbose (1,1) logical = false
+
+    %% Optional name-value pairs for acceleration
+    % Accelerate the coefficient estimation
+    options.coefaccel (1,1) logical = false
+    
+    % Extrapolate the coefficients
+    options.coefextra (1,1) logical = false
+    
+    % Accelerate the signal estimation
+    options.sigaccel (1,1) logical = false
+    
+    % Extrapolate the signal
+    options.sigextra (1,1) logical = false
+    
+    % Search for the coefficients and the signal using the linesearch strategy
+    % and the current and previous solutions
+    options.linesearch (1,1) logical = false
+
+    %% Optional name-value pairs for Douglas–Rachford
+    % Number of iterations for the solver of the subproblems;
+    % set a number or a vector;
+    % for progressive iteration, set DRmaxit=round(logspace(2, 3, maxit))'
+    options.DRmaxit (1,:) double {mustBePositive} = 1000
+    
+    % How to build the matrices needed for the subproblems
+    options.mat (1,1) string {mustBeMember(options.mat, ["toeplitz", "xcorr", "conv", "fft"])} = "toeplitz"
+    
+    % Use the Cholesky decomposition to substitute for the multiplication
+    % with matrix inversion in the non-accelerated DR algorithm
+    options.decompose (1,1) logical = true
+    
+    % Parameter of the DR algorithm for coefficient estimation
+    options.gammaC (1,1) double {mustBePositive} = 0.1
+    
+    % Parameter of the DR algorithm for signal estimation
+    options.gammaS (1,1) double {mustBePositive} = 10
+    
+end
 
 % save the parsed results to nice variables
-coefaccel  = pars.Results.coefaccel;
-coefextra  = pars.Results.coefextra;
-sigaccel   = pars.Results.sigaccel;
-sigextra   = pars.Results.sigextra;
-linesearch = pars.Results.linesearch;
-saveall    = pars.Results.saveall;
-DRmaxit    = pars.Results.DRmaxit;
-mat        = pars.Results.mat;
-decompose  = pars.Results.decompose;
-gammaC     = pars.Results.gammaC;
-gammaS     = pars.Results.gammaS;
-plotLS     = pars.Results.plotLS;
-verbose    = pars.Results.verbose;
+a            = options.a;
+coefaccel    = options.coefaccel;
+coefextra    = options.coefextra;
+decompose    = options.decompose;
+delta        = options.delta;
+DRmaxit      = options.DRmaxit;
+gammaC       = options.gammaC;
+gammaS       = options.gammaS;
+linesearch   = options.linesearch;
+mat          = options.mat;
+plotLS       = options.plotLS;
+saveall      = options.saveall;
+segmentation = options.segmentation;
+sigaccel     = options.sigaccel;
+sigextra     = options.sigextra;
+verbose      = options.verbose;
+w            = options.w;
+wtype        = options.wtype;
 
 % update plotLS
-plotLS = linesearch && plotLS;
+plotLS = linesearch && plotLS && ~segmentation;
 
-%% initialization
-solution = signal;
-N = length(signal);
-if saveall
-    restored = NaN(N, maxit);
-end
-oldcoef = zeros(p+1, 1); % auxiliary variable for the extrapolation
-oldsolution = zeros(N, 1); % auxiliary variable for the extrapolation
+% compute objective?
+computeobj = nargout > 1 || linesearch;
 
-% define some useful functions
-soft = @(x, t) sign(x).*max(abs(x)-t, 0);
-proj = @(x) signal .* masks.R + ...
-            max(x, signal) .* masks.U + ...
-            min(x, signal) .* masks.L;
-if nargout > 1 || linesearch
-    if length(lambda) > 1 && strcmpi(method, "declipping") && lambda(2) < Inf
-        Q = @(x, c) 0.5*norm(fft(c, N+p).*fft(x, N+p))^2 / (N+p)...
-            + lambda(1)*norm(c, 1)...
-            + lambda(2)*0.5*norm(x-proj(x))^2;
-    else
-        Q = @(x, c) 0.5*norm(fft(c, N+p).*fft(x, N+p))^2 / (N+p)...
-            + lambda(1)*norm(c, 1);
+% set the progression of the Douglas–Rachford iterations
+maxits = DRmaxit(:) .* ones(maxit, 1);
+
+% estimate delta from data if necessary
+if strcmpi(method, "dequantization") && delta == Inf
+    quant_levels = unique(signal);
+    quant_steps = diff(quant_levels);
+    delta = median(quant_steps);
+    if verbose
+        fprintf("Estimated quantization step: %.3f\n", delta)
     end
-    objective = NaN(maxit, 1);
-end
-
-% if desired, compute the progression of the Douglas-Rachford iterations
-if isfloat(DRmaxit)
-    if isscalar(DRmaxit)
-        maxits = DRmaxit*ones(maxit, 1);
-    else
-        maxits = DRmaxit;
-    end
-else
-    maxits = round(logspace(2, 3, maxit));
-end
-
-% prepare some matrices for the inpainting / glp case
-if strcmpi(method, "inpainting") || strcmpi(method, "glp")
-    indmiss = find(~masks.R);
-    indobs  = find(masks.R);
-    IAA     = abs(repmat(indmiss, 1, N)-repmat(1:N, length(indmiss), 1));
-    IAA1    = IAA <= p;
 end
 
 % if desired, initialize the figures for line search plotting
@@ -190,25 +186,136 @@ if plotLS
     fig2 = figure("visible", "off"); % second derivative
     tls1 = tiledlayout(fig1, "flow");
     tls2 = tiledlayout(fig2, "flow");
+else
+    fig1 = [];
+    fig2 = [];
+    tls1 = [];
+    tls2 = [];
 end
 
-% if desired, start the timer
-if nargout > 2
-    times = NaN(maxit, 1);
-    tic
+%% padding the signal
+if ~segmentation
+    w = length(signal);
+    a = length(signal);
+    wtype = 'rect';
 end
 
-%% main iteration
-if verbose
-    str = "";
+% L is divisible by a and minimum amount of zeros equals gl (window length)
+% zeros will be appended to avoid periodization of nonzero samples
+L    = ceil(length(signal)/a)*a + (ceil(w/a)-1)*a;
+S    = L/a; % number of signal segments
+data = [signal;  zeros(L-length(signal), 1)];
+if ~strcmpi(method, "dequantization")
+    masks.R = [masks.R; true(L-length(signal), 1)];
+    masks.U = [masks.U; false(L-length(signal), 1)];
+    masks.L = [masks.L; false(L-length(signal), 1)];
 end
-for i = 1:maxit
+
+%% initializing the output arrays
+mrestored = zeros(w, maxit, S);
+objective = NaN(maxit, S);
+times = NaN(maxit, S);
+
+%% construction of analysis and synthesis windows
+if strcmpi(wtype, 'rect')
+    gana = ones(w, 1);
+    if segmentation
+        gsyn = gabwin('hann', a, w, L);
+        gsyn = fftshift(gsyn);
+        gsyn = normalize(gsyn, 'peak');
+        gsyn = gsyn * (2 * a / w);
+    else
+        gsyn = gana;
+    end
+else
+    gana = gabwin(char(wtype), a, w, L);
+    gana = normalize(gana, 'peak'); % peak-normalization of the analysis window
+    gana = fftshift(gana);
+    gsyn = gabdual(gana, a, w)*w; % computing the synthesis window
+end
+
+% multiply the quantization step
+if strcmpi(method, "dequantization")
+    delta = delta * gana;
+end
+
+%% segment settings
+mdata = NaN(w, S);
+mR = true(w, S);
+mL = false(w, S);
+mU = false(w, S);
+for s = 1:S
+    % defining the indices of the current block
+    indices = 1 + (s-1)*a - floor(w/2) : (s-1)*a + ceil(w/2);
+    indices = 1 + mod(indices-1, L);
+    
+    % defining the segment data and masks
+    mdata(:, s) = data(indices) .* gana;
+    if ~strcmpi(method, "dequantization")
+        mR(:, s) = masks.R(indices);
+        mL(:, s) = masks.L(indices);
+        mU(:, s) = masks.U(indices);
+    end
+end
+maxits = repmat(maxits, 1, S);
+
+% parfor s = 1:S
+for s = 1:S
 
     if verbose
-        fprintf(repmat('\b', 1, strlength(str)))
-        str = sprintf("iteration %d of %d", i, maxit);
-        fprintf(str)
+        fprintf('Processing segment %d of %d...\n', s, S)
     end
+    smasks = struct('R', mR(:, s), 'L', mL(:, s), 'U', mU(:, s));
+
+    %% initialization
+    solution = mdata(:, s);
+    N = length(solution); % notational convenience, this is equal to w
+    oldcoef = zeros(p+1, 1); % auxiliary variable for the extrapolation
+    oldsolution = zeros(N, 1); % auxiliary variable for the extrapolation
+    
+    % define some useful functions
+    soft = @(x, t) sign(x).*max(abs(x)-t, 0);
+    if strcmpi(method, "declipping")
+        proj = @(x) mdata(:, s) .* smasks.R + ...
+                    max(x, mdata(:, s)) .* smasks.U + ...
+                    min(x, mdata(:, s)) .* smasks.L;
+    elseif strcmpi(method, "dequantization")
+        proj = @(x) proj_quant(x, mdata(:, s), delta);
+    else
+        proj = @(x) x;
+    end
+    if length(lambda) > 1 && lambda(2) < Inf
+        Q = @(x, c) 0.5*norm(fft(c, N+p).*fft(x, N+p))^2 / (N+p)...
+            + lambda(1)*norm(c, 1)...
+            + lambda(2)*0.5*norm(x-proj(x))^2;
+    else
+        Q = @(x, c) 0.5*norm(fft(c, N+p).*fft(x, N+p))^2 / (N+p)...
+            + lambda(1)*norm(c, 1);
+    end
+    
+    % prepare some matrices for the inpainting / glp case
+    if strcmpi(method, "inpainting") || strcmpi(method, "glp")
+        indmiss = find(~smasks.R);
+        indobs  = find(smasks.R);
+        IAA     = abs(repmat(indmiss, 1, N)-repmat(1:N, length(indmiss), 1));
+        IAA1    = IAA <= p;
+    else
+        indmiss = [];
+        indobs = [];
+        IAA = [];
+        IAA1 = [];
+    end
+    
+    %% main iteration
+    str = "";
+    t = tic;
+    for i = 1:maxit
+    
+        if verbose
+            fprintf(repmat('\b', 1, strlength(str)))
+            str = sprintf("iteration %d of %d", i, maxit);
+            fprintf(str)
+        end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %                                                                         %
@@ -216,69 +323,70 @@ for i = 1:maxit
 %                                                                         %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-    if lambda(1) == 0        
-        coef = lpc(solution, p)'; 
-    else
-        % prepare the matrix XX
-        if strcmpi(mat, "toeplitz")
-            X  = toeplitz([solution; zeros(p, 1)], [solution(1), zeros(1, p)]);
-            XX = X'*X;
-            clear X
-        elseif strcmpi(mat, "xcorr")
-            x  = xcorr(solution, p)';
-            XX = spdiags(ones(p+1, 1)*x, -p:p, p+1, p+1);
-        elseif strcmpi(mat, "conv")
-            x  = conv(solution, flip(solution))';
-            XX = spdiags(ones(p+1, 1)*x(N-p:N+p), -p:p, p+1, p+1);
-        elseif strcmpi(mat, "fft")
-            x  = ifft(fft([solution' zeros(1, p)]) .* fft([flip(solution)' zeros(1, p)]));
-            XX = spdiags(ones(p+1, 1)*x(N-p:N+p), -p:p, p+1, p+1);
-        end
-        
-        % check the positive definiteness using chol
-        try
-            dXX = decomposition(eye(p+1) + gammaC*XX, "chol");
-        catch
-            break
-        end
-        
-        % check the conditioning
-        if isIllConditioned(dXX)
-            break
-        end
-        
-        if coefaccel
-            % set the parameters of the accelerated Douglas-Rachford
-            % algorithm
-            P     = @(a) lambda(1)*norm(a, 1);
-            proxP = @(a, t) [1; soft(a(2:end), lambda(1)*t)]; % proximal operator of the penalty
-
-            % solve the task
-            coef = DouglasRachfordA(zeros(N+p, 1), solution, P, proxP, p+1, maxits(i), "alpha", gammaC);
+        if lambda(1) == 0        
+            coef = lpc(solution, p)'; 
         else
-            % set the parameters of the Douglas-Rachford algorithm
-            DR.lambda = 1;
-            DR.gamma  = gammaC;
-            DR.y0     = [1; zeros(p, 1)];
-            DR.maxit  = maxits(i);
-            DR.tol    = -Inf;
-            
-            % set the parameters of the model
-            DR.f  = @(x) 0.5*norm(fft(coef, N+p).*fft(x, N+p))^2 / (N+p);
-            if decompose
-                DR.prox_f = @(a, t) dXX\a;
+            % prepare the matrix XX
+            if strcmpi(mat, "toeplitz")
+                X  = toeplitz([solution; zeros(p, 1)], [solution(1), zeros(1, p)]);
+                XX = X'*X;
+            elseif strcmpi(mat, "xcorr")
+                x  = xcorr(solution, p)';
+                XX = spdiags(ones(p+1, 1)*x, -p:p, p+1, p+1);
+            elseif strcmpi(mat, "conv")
+                x  = conv(solution, flip(solution))';
+                XX = spdiags(ones(p+1, 1)*x(N-p:N+p), -p:p, p+1, p+1);
+            elseif strcmpi(mat, "fft")
+                x  = ifft(fft([solution' zeros(1, p)]) .* fft([flip(solution)' zeros(1, p)]));
+                XX = spdiags(ones(p+1, 1)*x(N-p:N+p), -p:p, p+1, p+1);
             else
-                invmat = inv(eye(p+1) + gammaC*XX);
-                DR.prox_f = @(a, t) invmat*a; %#ok<MINV>
+                XX = [];
             end
-            DR.g      = @(a) 0.5*norm(fft(solution, N+p).*fft(a, N+p))^2 / (N+p);
-            DR.prox_g = @(a, t) [1; soft(a(2:end), lambda(1)*t)]; 
-            DR.dim = p+1;
-
-            % solve the task
-            coef = DouglasRachford(DR, DR);
+            
+            % check the positive definiteness using chol
+            try
+                dXX = decomposition(eye(p+1) + gammaC*XX, "chol");
+            catch
+                if verbose
+                    warning("Stopped on signal matrix decomposition in iteration %d.", i)
+                end
+                break
+            end
+            
+            % check the conditioning
+            if isIllConditioned(dXX)
+                if verbose
+                    warning("Stopped on signal matrix ill conditioning in iteration %d.", i)
+                end
+                break
+            end
+            
+            if coefaccel
+                % set the parameters of the accelerated Douglas–Rachford
+                % algorithm
+                P     = @(a) lambda(1)*norm(a, 1);
+                proxP = @(a, t) [1; soft(a(2:end), lambda(1)*t)]; % proximal operator of the penalty
+    
+                % solve the task
+                coef = DouglasRachfordA(zeros(N+p, 1), solution, P, proxP, p+1, maxits(i, s), "alpha", gammaC);
+            else                
+                % set the parameters of the model
+                f  = @(a) 0.5*norm(fft(solution, N+p).*fft(a, N+p))^2 / (N+p);
+                if decompose
+                    prox_f = @(a, t) dXX\a;
+                else
+                    invmat = inv(eye(p+1) + gammaC*XX);
+                    prox_f = @(a, t) invmat*a; %#ok<MINV>
+                end
+                g      = @(a) lambda(1)*norm(a(2:end), 1);
+                prox_g = @(a, t) [1; soft(a(2:end), lambda(1)*t)]; 
+    
+                % solve the task
+                coef = DouglasRachford(f, g, prox_f, prox_g, p+1, ...
+                    "lambda", 1, "gamma", gammaC, "maxit", maxits(i, s), ...
+                    "startpoint", [1; zeros(p, 1)], "tol", -Inf);
+            end
         end
-    end
     
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %                                                                         %
@@ -286,10 +394,10 @@ for i = 1:maxit
 %                                                                         %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-    if coefextra && i > 1
-        % this formula is heuristic
-        coef = coef + 2*(maxit-i)/(maxit-1) * (coef - oldcoef);
-    end
+        if coefextra && i > 1
+            % this formula is heuristic
+            coef = coef + 2*(maxit-i)/(maxit-1) * (coef - oldcoef);
+        end
     
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %                                                                         %
@@ -297,92 +405,90 @@ for i = 1:maxit
 %                                                                         %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-    if strcmpi(method, "inpainting") || strcmpi(method, "glp")
-        AA       = zeros(size(IAA));
-        b        = coef'*hankel(coef', [coef(end), zeros(1, p)]);
-        AA(IAA1) = b(IAA(IAA1)+1);
-        [R, er]  = chol(AA(:, indmiss));
-        if er
-            break
+        if strcmpi(method, "inpainting") || strcmpi(method, "glp")
+            AA       = zeros(size(IAA));
+            b        = coef'*hankel(coef', [coef(end), zeros(1, p)]);
+            AA(IAA1) = b(IAA(IAA1)+1);
+            [R, er]  = chol(AA(:, indmiss));
+            if er
+                if verbose
+                    warning("Stopped on AA matrix decomposition in iteration %d.", i)
+                end
+                break
+            else
+                solution(~smasks.R) = -R\(R'\(AA(:, indobs)*mdata(indobs, s)));
+            end
         else
-            solution(~masks.R) = -R\(R'\(AA(:, indobs)*signal(indobs)));
-        end
-    else
-        % prepare the matrix AA
-        if strcmpi(mat, "toeplitz")
-            A  = toeplitz([coef; zeros(N-1, 1)], [coef(1), zeros(1, N-1)]);
-            AA = A'*A;
-            clear A
-        elseif strcmpi(mat, "xcorr")
-            b  = xcorr(coef, p)';
-            AA = spdiags(ones(N, 1)*b, -p:p, N, N);
-        elseif strcmpi(mat, "conv")
-            b  = conv(coef, flip(coef))';
-            AA = spdiags(ones(N, 1)*b, -p:p, N, N);
-        elseif strcmpi(mat, "fft")
-            b  = ifft(fft([coef' zeros(1, p)]) .* fft([flip(coef') zeros(1, p)]));
-            AA = spdiags(ones(N, 1)*b, -p:p, N, N);
-        end
-
-        % check the positive definiteness using chol
-        try
-            dAA = decomposition(eye(N) + gammaS*AA, "chol");
-        catch
-            if verbose
-                fprintf("Stopped on decomposition in iteration %d.\n", i)
-            end
-            break
-        end
-        
-        % check the conditioning
-        if isIllConditioned(dAA)
-            if verbose
-                fprintf("Stopped on ill conditioning in iteration %d.\n", i)
-            end
-            break
-        end
-
-        if sigaccel
-            % set the parameters of the accelerated Douglas-Rachford algorithm
-            if length(lambda) > 1  && lambda(2) < Inf
-                P     = @(x) lambda(2)*0.5*norm(x-proj(x))^2;
-                proxP = @(x, t) lambda(2)*t/(lambda(2)*t+1)*proj(x) + 1/(lambda(2)*t+1)*x;
+            % prepare the matrix AA
+            if strcmpi(mat, "toeplitz")
+                A  = toeplitz([coef; zeros(N-1, 1)], [coef(1), zeros(1, N-1)]);
+                AA = A'*A;
+            elseif strcmpi(mat, "xcorr")
+                b  = xcorr(coef, p)';
+                AA = spdiags(ones(N, 1)*b, -p:p, N, N);
+            elseif strcmpi(mat, "conv")
+                b  = conv(coef, flip(coef))';
+                AA = spdiags(ones(N, 1)*b, -p:p, N, N);
+            elseif strcmpi(mat, "fft")
+                b  = ifft(fft([coef' zeros(1, p)]) .* fft([flip(coef') zeros(1, p)]));
+                AA = spdiags(ones(N, 1)*b, -p:p, N, N);
             else
-                P     = @(x) 0; % this is actually the indicator function
-                proxP = @(x, t) proj(x);
+                AA = [];
             end
-
-            % solve the task
-            solution = DouglasRachfordA(zeros(N+p, 1), coef, P, proxP, N, maxits(i), "alpha", gammaS);
-        else
-            % set the parameters of the Douglas-Rachford algorithm
-            DR.lambda = 1;
-            DR.gamma  = gammaS;
-            DR.y0     = solution;
-            DR.maxit  = maxits(i);
-            DR.tol    = -Inf;
-
-            % set the parameters of the model
-            DR.f = @(x) 0.5*norm(fft(coef, N+p).*fft(x, N+p))^2 / (N+p);
-            if decompose
-                DR.prox_f = @(x, t) dAA\x;
-            else
-                invmat = inv(eye(N) + gammaS*AA);
-                DR.prox_f = @(x, t) invmat*x; %#ok<MINV>
+    
+            % check the positive definiteness using chol
+            try
+                dAA = decomposition(eye(N) + gammaS*AA, "chol");
+            catch
+                if verbose
+                    warning("Stopped on coef matrix decomposition in iteration %d.", i)
+                end
+                break
             end
-            if length(lambda) > 1  && lambda(2) < Inf
-                DR.g      = @(x) lambda(2)*0.5*norm(x-proj(x))^2;
-                DR.prox_g = @(x, t) lambda(2)*t/(lambda(2)*t+1)*proj(x) + 1/(lambda(2)*t+1)*x;
-            else
-                DR.g      = @(x) 0;
-                DR.prox_g = @(x, t) proj(x);
+            
+            % check the conditioning
+            if isIllConditioned(dAA)
+                if verbose
+                    warning("Stopped on coef matrix ill conditioning in iteration %d.", i)
+                end
+                break
             end
-            DR.dim = N;
-
-            % solve the task
-            solution = DouglasRachford(DR, DR);
+    
+            if sigaccel
+                % set the parameters of the accelerated Douglas–Rachford algorithm
+                if length(lambda) > 1  && lambda(2) < Inf
+                    P     = @(x) lambda(2)*0.5*norm(x-proj(x))^2;
+                    proxP = @(x, t) lambda(2)*t/(lambda(2)*t+1)*proj(x) + 1/(lambda(2)*t+1)*x;
+                else
+                    P     = @(x) 0; % this is actually the indicator function
+                    proxP = @(x, t) proj(x);
+                end
+    
+                % solve the task
+                solution = DouglasRachfordA(zeros(N+p, 1), coef, P, proxP, N, maxits(i, s), "alpha", gammaS);
+            else   
+                % set the parameters of the model
+                f = @(x) 0.5*norm(fft(coef, N+p).*fft(x, N+p))^2 / (N+p);
+                if decompose
+                    prox_f = @(x, t) dAA\x;
+                else
+                    invmat = inv(eye(N) + gammaS*AA);
+                    prox_f = @(x, t) invmat*x; %#ok<MINV>
+                end
+                if length(lambda) > 1  && lambda(2) < Inf
+                    g      = @(x) lambda(2)*0.5*norm(x-proj(x))^2;
+                    prox_g = @(x, t) lambda(2)*t/(lambda(2)*t+1)*proj(x) + 1/(lambda(2)*t+1)*x;
+                else
+                    g      = @(x) 0;
+                    prox_g = @(x, t) proj(x);
+                end
+    
+                % solve the task
+                solution = DouglasRachford(f, g, prox_f, prox_g, N, ...
+                    "lambda", 1, "gamma", gammaS, "maxit", maxits(i, s), ...
+                    "startpoint", solution, "tol", -Inf);
+            end
         end
-    end
     
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %                                                                         %
@@ -390,23 +496,23 @@ for i = 1:maxit
 %                                                                         %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-    if strcmpi(method, "glp") && i < maxit        
-        % signal segments to be checked
-        solutionU = solution(masks.U);
-        solutionL = solution(masks.L);
-        signalU   = signal(masks.U);
-        signalL   = signal(masks.L);
-        
-        % indicators of the samples to be rectified
-        IU = solutionU < signalU;
-        IL = solutionL > signalL;
-                
-        % rectification
-        solutionU(IU)     = signalU(IU) + abs(solutionU(IU) - signalU(IU));
-        solutionL(IL)     = signalL(IL) - abs(solutionL(IL) - signalL(IL));
-        solution(masks.U) = solutionU;
-        solution(masks.L) = solutionL;
-    end
+        if strcmpi(method, "glp") && i < maxit        
+            % signal segments to be checked
+            solutionU = solution(smasks.U);
+            solutionL = solution(smasks.L);
+            signalU   = mdata(smasks.U, s);
+            signalL   = mdata(smasks.L, s);
+            
+            % indicators of the samples to be rectified
+            IU = solutionU < signalU;
+            IL = solutionL > signalL;
+                    
+            % rectification
+            solutionU(IU)      = signalU(IU) + abs(solutionU(IU) - signalU(IU));
+            solutionL(IL)      = signalL(IL) - abs(solutionL(IL) - signalL(IL));
+            solution(smasks.U) = solutionU;
+            solution(smasks.L) = solutionL;
+        end
     
     
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -415,10 +521,10 @@ for i = 1:maxit
 %                                                                         %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-    if sigextra && i > 1
-        % this formula is heuristic
-        solution = solution + (maxit-i)/(maxit-1) * (solution - oldsolution);
-    end
+        if sigextra && i > 1
+            % this formula is heuristic
+            solution = solution + (maxit-i)/(maxit-1) * (solution - oldsolution);
+        end
     
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %                                                                         %
@@ -426,76 +532,76 @@ for i = 1:maxit
 %                                                                         %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-    if linesearch && i > 1 && i < maxit
-        
-        % search for the solution and coefs on the line given the previous
-        % and current solution and previous and current coefs
-        steps = logspace(-4, 2, 100);
-        QQ = zeros(length(steps), 1);
-        for j = 1:length(steps)
-            QQ(j) = Q(solution + steps(j)*(solution-oldsolution), ...
-                coef + steps(j)*(coef-oldcoef));
+        if linesearch && i > 1 && i < maxit
+            
+            % search for the solution and coefs on the line given the previous
+            % and current solution and previous and current coefs
+            steps = logspace(-4, 2, 100);
+            QQ = zeros(length(steps), 1);
+            for j = 1:length(steps)
+                QQ(j) = Q(solution + steps(j)*(solution-oldsolution), ...
+                    coef + steps(j)*(coef-oldcoef));
+            end
+            
+            % plot the objective function and the second derivative along the
+            % line
+            if plotLS
+                x1 = solution;
+                x2 = x1 - oldsolution;
+                A1 = toeplitz([coef; zeros(N-1, 1)], [coef(1), zeros(1, N-1)]);
+                A2 = A1 - toeplitz([oldcoef; zeros(N-1, 1)], [oldcoef(1), zeros(1, N-1)]);
+                C0 = x1'*(A1'*A1)*x1;
+                C1 = 2*(x2'*A1' + x1'*A2')*A1*x1;
+                C2 = x1'*(A2'*A2)*x1 + x2'*(A1'*A1)*x2 + 2*x2'*(A2'*A1 + A1'*A2)*x1;
+                C3 = 2*(x1'*A2' + x2'*A1')*A2*x2;
+                C4 = x2'*(A2'*A2)*x2;
+                pol1 = @(t) 0.5*(C4*t.^4 + C3*t.^3 + C2*t.^2 + C1*t + C0);
+                pol2 = @(t) 6*C4*t.^2 + 3*C3*t + C2;
+    
+                % plot the objective function
+                nexttile(tls1)
+                h1 = loglog(steps, pol1(steps));
+                hold on
+                h2 = loglog(steps, QQ);
+                [m1, I] = min(QQ);
+                x1 = steps(I);
+                Q2min = @(step) Q(solution + step*(solution-oldsolution), ...
+                        coef + step*(coef-oldcoef)); 
+                [x2, m2] = fminbnd(Q2min, steps(1), steps(end));
+                m0 = Q(solution, coef); % objective with no extrapolation
+                title(sprintf(...
+                    "iteration %d\n" + ...
+                    "min. point from samples: [%.3e, %.3e]\n" + ...
+                    "using fminbnd: [%.3e, %.3e]", ...
+                    i, x1, m1-m0, x2, m2-m0))
+                xline(m1, ":k")
+                xlabel("step")
+                ylabel("objective")
+                legend([h1, h2], "AR part", "whole objective")
+    
+                % plot the secont derivative
+                nexttile(tls2)
+                numerical = gradient(gradient(QQ));
+                polynomial = pol2(steps);
+                h1 = loglog(steps(polynomial > 0), polynomial(polynomial > 0));
+                hold on
+                h2 = loglog(steps(numerical > 0), numerical(numerical > 0));
+                title(sprintf("iteration %d", i))
+                xline(m1, ":k")
+                xlabel("step")
+                ylabel("2nd derivative (if positive)")
+                xlim(steps([1, end]))
+                legend([h1, h2], "polynomial (only AR part)", "numerical (whole objective)")
+            end
+    
+            % update the solution
+            [minimum, index] = min(QQ);
+            if minimum < Q(solution, coef)
+                solution = solution + steps(index)*(solution-oldsolution);
+                coef = coef + steps(index)*(coef-oldcoef);
+            end
+            
         end
-        
-        % plot the objective function and the second derivative along the
-        % line
-        if plotLS
-            x1 = solution;
-            x2 = x1 - oldsolution;
-            A1 = toeplitz([coef; zeros(N-1, 1)], [coef(1), zeros(1, N-1)]);
-            A2 = A1 - toeplitz([oldcoef; zeros(N-1, 1)], [oldcoef(1), zeros(1, N-1)]);
-            C0 = x1'*(A1'*A1)*x1;
-            C1 = 2*(x2'*A1' + x1'*A2')*A1*x1;
-            C2 = x1'*(A2'*A2)*x1 + x2'*(A1'*A1)*x2 + 2*x2'*(A2'*A1 + A1'*A2)*x1;
-            C3 = 2*(x1'*A2' + x2'*A1')*A2*x2;
-            C4 = x2'*(A2'*A2)*x2;
-            pol1 = @(t) 0.5*(C4*t.^4 + C3*t.^3 + C2*t.^2 + C1*t + C0);
-            pol2 = @(t) 6*C4*t.^2 + 3*C3*t + C2;
-
-            % plot the objective function
-            nexttile(tls1)
-            h1 = loglog(steps, pol1(steps));
-            hold on
-            h2 = loglog(steps, QQ);
-            [m1, I] = min(QQ);
-            x1 = steps(I);
-            Q2min = @(step) Q(solution + step*(solution-oldsolution), ...
-                    coef + step*(coef-oldcoef)); 
-            [x2, m2] = fminbnd(Q2min, steps(1), steps(end));
-            m0 = Q(solution, coef); % objective with no extrapolation
-            title(sprintf(...
-                "iteration %d\n" + ...
-                "min. point from samples: [%.3e, %.3e]\n" + ...
-                "using fminbnd: [%.3e, %.3e]", ...
-                i, x1, m1-m0, x2, m2-m0))
-            xline(m1, ":k")
-            xlabel("step")
-            ylabel("objective")
-            legend([h1, h2], "AR part", "whole objective")
-
-            % plot the secont derivative
-            nexttile(tls2)
-            numerical = gradient(gradient(QQ));
-            polynomial = pol2(steps);
-            h1 = loglog(steps(polynomial > 0), polynomial(polynomial > 0));
-            hold on
-            h2 = loglog(steps(numerical > 0), numerical(numerical > 0));
-            title(sprintf("iteration %d", i))
-            xline(m1, ":k")
-            xlabel("step")
-            ylabel("2nd derivative (if positive)")
-            xlim(steps([1, end]))
-            legend([h1, h2], "polynomial (only AR part)", "numerical (whole objective)")
-        end
-
-        % update the solution
-        [minimum, index] = min(QQ);
-        if minimum < Q(solution, coef)
-            solution = solution + steps(index)*(solution-oldsolution);
-            coef = coef + steps(index)*(coef-oldcoef);
-        end
-        
-    end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %                                                                         %
@@ -503,21 +609,17 @@ for i = 1:maxit
 %                                                                         %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-    % update the solution
-    if saveall
-        restored(:, i) = solution;
-    else
-        restored = solution;
-    end
+        % update the solution
+        mrestored(:, i, s) = solution;
     
-	% compute the objective value
-    if nargout > 1
-        objective(i) = Q(solution, coef);
-    end
-    
-    % save the current solution for the next iteration
-    oldcoef = coef;
-    oldsolution = solution;
+	    % compute the objective value
+        if computeobj
+            objective(i, s) = Q(solution, coef);
+        end
+        
+        % save the current solution for the next iteration
+        oldcoef = coef;
+        oldsolution = solution;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %                                                                         %
@@ -525,17 +627,33 @@ for i = 1:maxit
 %                                                                         %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-    if nargout > 2
-        times(i) = toc;
+        times(i, s) = toc(t);
+    
+    end
+    
+    if verbose
+        fprintf(repmat('\b', 1, strlength(str)))
     end
 
 end
 
-if verbose
-    fprintf(repmat('\b', 1, strlength(str)))
+%% overlap-add
+restored = zeros(L, maxit);
+for s = 1:S
+    indices = 1 + (s-1)*a - floor(w/2) : (s-1)*a + ceil(w/2);
+    indices = 1 + mod(indices-1, L);
+    restored(indices, :) = restored(indices, :) + mrestored(:, :, s).*repmat(gsyn, 1, maxit);
 end
 
-% rename the figures
+%% cropping the solution to the original length
+restored = restored(1:length(signal), :);
+if ~saveall
+    restored = restored(:, end);
+    objective = sum(objective, 2);
+    times = sum(times, 2);
+end
+
+%% rename the figures
 if plotLS
     title(tls1, "lineaserach in " + method + ", " + ...
         "showing also optimal step and objective change " + ...

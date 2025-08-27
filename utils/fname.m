@@ -7,10 +7,9 @@ function name = fname()
 %
 % name also includes the folder path 'results/' as a prefix
 %
-% Date: 08/07/2021
 % By Ondrej Mokry
 % Brno University of Technology
-% Contact: ondrej.mokry@mensa.cz
+% Contact: ondrej.mokry@vut.cz
 
 % get the function call stack
 stack = dbstack;

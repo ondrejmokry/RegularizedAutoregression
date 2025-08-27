@@ -1,33 +1,21 @@
-function sg(signal, fs, varargin)
+function sg(signal, fs, options)
 % SG is a customized function for plotting the (power) spectrogram of the
 % input signal, sampled at the input sampling frequency fs, with possible
 % variable arguments:
+
+arguments
+    signal
+    fs
+    options.name (1,:) char = ''            % name to be displayed as a title of the figure
+    options.solver (1,:) char = 'spt'       % the toolbox used to compute the STFT, either Signal Processing Toolbox ('spt'), or LTFAT ('ltfat')
+    options.reassigned (1,1) logical = true % switch of the reassignment of the spectrogram
+    options.w (1,1) double = 128            % window length in ms
+    options.croplims (1,1) logical = true   % crops color axis
+end
 %
-% name        ('')     name to be displayed as a title of the figure
-% solver      ('spt')  the toolbox used to compute the STFT, either
-%                      Signal Processing Toolbox ('spt'), or LTFAT
-%                      ('ltfat')
-% reassigned  (true)   switch of the reassignment of the spectrogram
-% w           (128)    window length in ms
-% croplims    (true)   crops color axis
-%
-% Date: 03/10/2021
 % By Ondrej Mokry
 % Brno University of Technology
-% Contact: xmokry12@vut.cz
-
-% create the parser
-pars = inputParser;
-
-% add optional name-value pairs
-addParameter(pars, 'name', '')
-addParameter(pars, 'solver', 'spt')
-addParameter(pars, 'reassigned', true)
-addParameter(pars, 'w', 128)
-addParameter(pars, 'croplims', true)
-
-% parse
-parse(pars, varargin{:})
+% Contact: ondrej.mokry@vut.cz
 
 % check signal size (should be a column vector)
 if size(signal, 1) < size(signal, 2)
@@ -35,11 +23,11 @@ if size(signal, 1) < size(signal, 2)
 end
 
 % compute and plot
-w = floor(pars.Results.w*fs/1000);
+w = floor(options.w*fs/1000);
 M = w;
-if strcmpi(pars.Results.solver, 'ltfat')
+if strcmpi(options.solver, 'ltfat')
     % use LTFAT to compute the DGT
-    if pars.Results.reassigned
+    if options.reassigned
         alpha = 0.75;
     else
         alpha = 0;
@@ -49,7 +37,7 @@ if strcmpi(pars.Results.solver, 'ltfat')
     resgram(signal, fs, 'sharp', alpha, 'wlen', w, 'xres', xres, 'yres', yres)
 else
     % use Signal Processing Toolbox to compute the DGT
-    if pars.Results.reassigned
+    if options.reassigned
         [~, F, T, P] = spectrogram(signal, w, 3*w/4, M, fs, 'yaxis', 'reassigned');
     else
         [~, F, T, P] = spectrogram(signal, w, 3*w/4, M, fs, 'yaxis');
@@ -72,17 +60,17 @@ h.Label.String = 'Power/frequency (dB/Hz)';
 h.Label.Interpreter = 'latex';
 
 % plot title
-if ~isempty(pars.Results.name)
-    if contains(pars.Results.name, '_')
-        title(pars.Results.name, 'Interpreter', 'none')
+if ~isempty(options.name)
+    if contains(options.name, '_')
+        title(options.name, 'Interpreter', 'none')
     else
-        title(pars.Results.name, 'Interpreter', 'latex')
+        title(options.name, 'Interpreter', 'latex')
     end
 end
 
 % limits
 ylim([0 min(fs/2, 12e3)])
-if pars.Results.croplims
+if options.croplims
     lims = clim;
     clim(lims(1) + [0.6, 0.9]*(lims(2)-lims(1)))
 end

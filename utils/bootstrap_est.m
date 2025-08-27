@@ -1,4 +1,4 @@
-function [ means, lower, upper ] = bootstrap_est(data, alpha, draws)
+function [ means, lower, upper ] = bootstrap_est(data, options)
 % bootstrap_est computes the interval estimation for the mean of given data
 % computed as the bootstrap-t interval [p. 160, 1]
 %
@@ -18,17 +18,14 @@ function [ means, lower, upper ] = bootstrap_est(data, alpha, draws)
 %   lower     lower (1-alpha) interval estimate for the mean of the data
 %   upper     upper (1-alpha) interval estimate for the mean of the data
 %
-% Date: 03/09/2021
 % By Ondrej Mokry
 % Brno University of Technology
-% Contact: ondrej.mokry@mensa.cz
+% Contact: ondrej.mokry@vut.cz
 
-if nargin < 3
-  draws = 1000;
-end
-
-if nargin < 2
-  alpha = 0.05;
+arguments
+    data
+    options.alpha (1, 1) double {mustBeGreaterThanOrEqual(options.alpha, 0), mustBeLessThanOrEqual(options.alpha, 1)} = 0.05
+    options.draws (1, 1) double {mustBeInteger, mustBePositive} = 1000
 end
 
 % reshape the data to a 2D array
@@ -37,7 +34,7 @@ data2D = reshape(data, dims(1), []);
 [m, n] = size(data2D);
 
 % initialize
-t      = NaN(draws, 1); % the stuff computed for each draw
+t      = NaN(options.draws, 1); % the stuff computed for each draw
 lower  = NaN(n, 1);
 upper  = NaN(n, 1);
 
@@ -50,12 +47,12 @@ for i = 1:n
 
     % bootstrap upper and lower bound
     s = sqrt(vars(i));
-    for j = 1:draws
-        draw = randsample(data2D(:,i),m,true);
-        t(j) = (mean(draw,'omitnan') - means(i))/sqrt(var(draw,'omitnan'))*sqrt(m-1);
+    for j = 1:options.draws
+        draw = randsample(data2D(:, i), m, true);
+        t(j) = (mean(draw, 'omitnan') - means(i))/sqrt(var(draw, 'omitnan'))*sqrt(m-1);
     end
-    t_lower = quantile(t, 1-alpha/2);
-    t_upper = quantile(t, alpha/2);
+    t_lower = quantile(t, 1 - options.alpha/2);
+    t_upper = quantile(t, options.alpha/2);
     lower(i) = means(i) - t_lower*s/sqrt(m-1);
     upper(i) = means(i) - t_upper*s/sqrt(m-1);
 

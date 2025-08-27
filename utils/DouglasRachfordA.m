@@ -1,4 +1,4 @@
-function [ x, objval ] = DouglasRachfordA(y, h, P, proxP, Nx, MAX_ITER, varargin)
+function [ x, objval ] = DouglasRachfordA(y, h, P, proxP, Nx, MAX_ITER, options)
 % solves
 % min_x 0.5 || y - H x ||_2^2 + P(x)
 % where H is a Toeplitz matrix derived from the causal filter h of size
@@ -15,27 +15,26 @@ function [ x, objval ] = DouglasRachfordA(y, h, P, proxP, Nx, MAX_ITER, varargin
 % Istanbul Technical University, 2015
 %
 % Modified by Ondrej Mokry
-% ondrej.mokry@mensa.cz
+% ondrej.mokry@vut.cz
 % Brno University of Technology, 2021
 %
 %   - some notation and comments
 %   - generalized the proximal step
 %   - added computation of the objective function
 
-%% parse the inputs
-% create the parser
-p = inputParser;
+arguments
+    y
+    h
+    P
+    proxP
+    Nx (1,1) double {mustBePositive, mustBeInteger}
+    MAX_ITER (1,1) double {mustBePositive, mustBeInteger}
+    options.alpha (1,1) double {mustBePositive} = 0.1
+    options.lambda (1,1) double {mustBeGreaterThanOrEqual(options.lambda, 0), mustBeLessThanOrEqual(options.lambda, 1)} = 0.1
+end
 
-% add optional name-value pairs
-addParameter(p, 'alpha', 0.1)
-addParameter(p, 'lambda', 0.1)
-
-% parse
-parse(p, varargin{:})
-
-% save the parsed results to nice variables
-alpha  = p.Results.alpha;
-lambda = p.Results.lambda;
+alpha = options.alpha;
+lambda = options.lambda;
 
 %% initialization
 m  = length(y);

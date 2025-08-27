@@ -32,10 +32,9 @@ function [ x_hat, objective, times ] = proxgrad(prox, grad, L, startpoint, ...
 %       objective      values of the objective function during iterations
 %       times          cumulative computation time during iterations
 %
-% Date: 24/11/2023
 % By Ondrej Mokry
 % Brno University of Technology
-% Contact: ondrej.mokry@mensa.cz
+% Contact: ondrej.mokry@vut.cz
 
 pars = inputParser;
 pars.KeepUnmatched = true;
