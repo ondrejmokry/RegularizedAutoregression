@@ -8,6 +8,7 @@ close all
 addpath('../utils')
 
 plotmetrics = 1:3; % 1: SDR, 2: PEMO-Q ODG, 3: PEAQ ODG
+tikz = false;
 
 % the audio signals to choose from
 audio_files = { 'a08_violin', ...
@@ -78,20 +79,20 @@ counter = 0;
 % inpainting
 for i = 1:num_inp
     counter = counter + 1;
-    legstr{counter} = ['inpainting, $$\lambda_\textup{C}$$ = ', num2str(A.lambdaC(i))];
+    legstr{counter} = ['inpainting, $\lambda_\textup{C}$ = ', num2str(A.lambdaC(i))];
 end
 
 % glp
 for i = 1:num_glp
     counter = counter + 1;
-    legstr{counter} = ['GLP, $$\lambda_\textup{C}$$ = ', num2str(A.lambdaC(i))];
+    legstr{counter} = ['GLP, $\lambda_\textup{C}$ = ', num2str(A.lambdaC(i))];
 end
 
 % declipping
 for i = 1:length(A.lambdaS)
     for j = 1:length(A.lambdaC)
         counter = counter + 1;
-        legstr{counter} = ['declipping, $$\lambda_\textup{C}$$ = ', num2str(A.lambdaC(j)), ', $$\lambda_\textup{S}$$ = ', num2str(A.lambdaS(i))];
+        legstr{counter} = ['declipping, $\lambda_\textup{C}$ = ', num2str(A.lambdaC(j)), ', $\lambda_\textup{S}$ = ', num2str(A.lambdaS(i))];
     end
 end
 
@@ -102,8 +103,6 @@ for i = 1:num_ref
 end
 
 %% prepare colors
-% set colormap
-% mapcolors = turbo(1 + length(A.lambdaS) + 1 + num_ref);
 mapcolors = turbo(num_ref);
 mapcolors = [mapcolors(1:length(A.lambdaS)+2, :); mapcolors];
 colors = zeros(num_tot, 3);
@@ -255,8 +254,8 @@ for metric = plotmetrics
     % add title
     switch metric
         case 1
-            title('$$\Delta$$SDR (dB), mean from all signals')
-            ylabel('$$\Delta$$SDR (dB)')
+            title('$\Delta$SDR (dB), mean from all signals')
+            ylabel('$\Delta$SDR (dB)')
         case 2
             title('PEMO-Q ODG, mean from all signals')
             ylabel('ODG')
@@ -266,23 +265,25 @@ for metric = plotmetrics
     end
 
     % create a fake figure to use for matlab2tikz
-    % ax = gca;
-    % figure
-    % b = bar(zeros(2, length(legstr)), 'grouped', 'FaceColor', 'flat');
-    % for i = 1:length(b)
-    %     b(i).CData = colors(i, :);
-    % end
-    % legend(legstr, 'location', 'eastoutside')
-    % xlabel(ax.XLabel.String)
-    % ylabel(ax.YLabel.String)
-    % title(ax.Title.String)
-    % set(gca, 'xlim', ax.XLim)
-    % set(gca, 'ylim', ax.YLim)
-    % set(gca, 'xtick', ax.XTick)
-    % set(gca, 'xticklabel', ax.XTickLabel)
-    % set(gca, 'ygrid', ax.YGrid)
-    % set(gca, 'yminorgrid', ax.YMinorGrid)
-    % set(gca, 'box', ax.Box)
+    if tikz
+        ax = gca;
+        figure
+        b = bar(zeros(2, length(legstr)), 'grouped', 'FaceColor', 'flat');
+        for i = 1:length(b)
+            b(i).CData = colors(i, :);
+        end
+        legend(legstr, 'location', 'eastoutside')
+        xlabel(ax.XLabel.String)
+        ylabel(ax.YLabel.String)
+        title(ax.Title.String)
+        set(gca, 'xlim', ax.XLim)
+        set(gca, 'ylim', ax.YLim)
+        set(gca, 'xtick', ax.XTick)
+        set(gca, 'xticklabel', ax.XTickLabel)
+        set(gca, 'ygrid', ax.YGrid)
+        set(gca, 'yminorgrid', ax.YMinorGrid)
+        set(gca, 'box', ax.Box)
+    end
 end
 
 %% make the figures docked
