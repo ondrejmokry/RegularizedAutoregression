@@ -91,7 +91,7 @@ lambda    = {0.01, 0.01, 0.01, 0.01, 0.01, 0.01, ...
 
 % 6 variants
 maxit      = [10, 10, 5, 5, 5, 5];
-DRmaxit    = {1000, 'progressive', 1000, 1000, 1000, 1000};
+DRmaxit    = {1000, round(logspace(2, 3, 10))', 1000, 1000, 1000, 1000};
 linesearch = [0 1 0 0 0 0];
 coefextra  = [0 0 0 1 0 1];
 sigextra   = [0 0 0 0 1 1];
@@ -155,7 +155,7 @@ for i = 1:length(audio_files)
     % clip (using the function in survey toolbox/Tools)
     [data_clipped, masks, theta, trueSDR, percentage] = clip_sdr(data, input_SDRs(j));
 
-    % save masks in the right form for segmentation.m
+    % save masks in the right form for segmentation
     masks.U = masks.Mh;
     masks.L = masks.Ml;
     masks.R = masks.Mr;
@@ -164,14 +164,14 @@ for i = 1:length(audio_files)
         %% main algorithm
         fprintf('Algorithm: %s (%d of %d)\n', algos{algo}, algo, length(algos))
         tic
-        restored = segmentation(...
+        restored = janssen(...
             method{algo}, data_clipped, masks, lambda{algo}, ps(k), maxit(m), ... % model and main parameters
-            'wtype', 'rect', 'w', ws(l), 'a', ws(l)/2, ...                        % overlap-add
-            'coefaccel', coefaccel(algo), 'sigaccel', sigaccel(algo), ...       % acceleration
-            'DRmaxit', DRmaxit{m}, ...                                        % inner iterations
-            'linesearch', linesearch(m), ...                                  % liensearch
-            'coefextra', coefextra(m), 'sigextra', sigextra(m), ...             % extrapolation
-            'verbose', false);                                               % (not) printing processed segment
+            'segmentation', true, 'wtype', 'rect', 'w', ws(l), 'a', ws(l)/2, ...  % overlap-add
+            'coefaccel', coefaccel(algo), 'sigaccel', sigaccel(algo), ...         % acceleration
+            'DRmaxit', DRmaxit{m}, ...                                            % inner iterations
+            'linesearch', linesearch(m), ...                                      % liensearch
+            'coefextra', coefextra(m), 'sigextra', sigextra(m), ...               % extrapolation
+            'verbose', false);                                                    % (not) printing processed segment
         reconstructed(algo).times(i, j, k, l, m) = toc;
         
         %% SDR
@@ -230,4 +230,4 @@ for i = 1:length(audio_files)
 end
 
 %% clean up
-delete data_48.wav restored_48.wav
+delete data_48.wav clipped_48.wav restored_48.wav

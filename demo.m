@@ -5,22 +5,25 @@ close all
 
 addpath("utils")
 
+savetimes = false;
+
 %% settings
-p          = 128;   % order of the AR process 
-N          = 2048;  % length of the signal
-theta      = 0.2;   % threshold of the hard clipping
-iterations = 10;    % Janssen iterations
-lambdaC    = 0.1;   % parameter of AR coefficient regularization
-lambdaS    = 10;    % parameter of incosistent signal regularization
-simulate   = true;  % use simulated signal?
-plottime   = false; % use time as horizontal axis in plots
+p            = 256;   % order of the AR process 
+N            = 4096;  % length of the signal
+theta        = 0.8;   % threshold of the hard clipping
+iterations   = 10;    % Janssen iterations
+lambdaC      = 0.1;   % parameter of AR coefficient regularization
+lambdaS      = 10;    % parameter of incosistent signal regularization
+simulate     = true;  % use simulated signal?
+plottime     = false; % use time as horizontal axis in plots
+segmentation = false; % process the signal segment-wise
 
 % some more technical settings
 coefextra  = false;
 sigextra   = false;
 coefaccel  = true;
 sigaccel   = true;
-linesearch = true;
+linesearch = false;
 plotLS     = false;
 gammaC     = 0.1;
 gammaS     = 10;
@@ -60,7 +63,7 @@ end
 % normalize the signal
 signal = signal/max(abs(signal));
 
-%% create the degraded versions and the associated projection operators
+%% create the degraded version
 masks.R  = abs(signal) < theta;
 masks.U  = signal >= theta;
 masks.L  = signal <= -theta;
@@ -74,49 +77,61 @@ time = NaN(iterations, length(methods));
 %% processing
 % inpainting
 fprintf("Inpainting: ")
-[signals(:, :, 1), obj(:, 1), time(:, 1)] = janssen("inpainting", ...
+[signals(:, :, 1), O, T] = janssen("inpainting", ...
     degraded, masks, lambdaC, p, iterations, ...
+    "segmentation", segmentation, ...
     "DRmaxit", DRmaxit, "decompose", true, "mat", mat, ...
     "gammaC", gammaC, "gammaS", gammaS, ...
     "coefaccel", coefaccel, "sigaccel", sigaccel, ...
     "coefextra", coefextra, "sigextra", sigextra, ...
     "linesearch", linesearch, "plotLS", plotLS, "saveall", true);
+obj(:, 1) = sum(O, 2);
+time(:, 1) = sum(T, 2);
 fprintf("elapsed time %.1f seconds\n", time(end, 1))
 
 % declipping using GLP
 fprintf("GLP: ")
-[signals(:, :, 2), obj(:, 2), time(:, 2)] = janssen("glp", ...
+[signals(:, :, 2), O, T] = janssen("glp", ...
     degraded, masks, lambdaC, p, iterations, ...
+    "segmentation", segmentation, ...
     "DRmaxit", DRmaxit, "decompose", true, "mat", mat, ...
     "gammaC", gammaC, "gammaS", gammaS, ...
     "coefaccel", coefaccel, "sigaccel", sigaccel, ...
     "coefextra", coefextra, "sigextra", sigextra, ...
     "linesearch", linesearch, "plotLS", plotLS, ...
     "saveall", true, "verbose", false);
+obj(:, 2) = sum(O, 2);
+time(:, 2) = sum(T, 2);
 fprintf("elapsed time %.1f seconds\n", time(end, 2))
 
 % declipping using consistent Janssen
 fprintf("Inconsistent Janssen: ")
-[signals(:, :, 3), obj(:, 3), time(:, 3)] = janssen("declipping", ...
+[signals(:, :, 3), O, T] = janssen("declipping", ...
     degraded, masks, [lambdaC, lambdaS], p, iterations, ...
+    "segmentation", segmentation, ...
     "DRmaxit", DRmaxit, "decompose", true, "mat", mat, ...
     "gammaC", gammaC, "gammaS", gammaS, ...
     "coefaccel", coefaccel, "sigaccel", sigaccel, ...
     "coefextra", coefextra, "sigextra", sigextra, ...
     "linesearch", linesearch, "plotLS", plotLS, ...
     "saveall", true, "verbose", false);
+obj(:, 3) = sum(O, 2);
+time(:, 3) = sum(T, 2);
 fprintf("elapsed time %.1f seconds\n", time(end, 3))
 
 % declipping using consistent Janssen
 fprintf("Consistent Janssen: ")
-[signals(:, :, 4), obj(:, 4), time(:, 4)] = janssen("declipping", ...
+[signals(:, :, 4), O, T] = janssen("declipping", ...
     degraded, masks, [lambdaC, Inf], p, iterations, ...
+    "segmentation", segmentation, ...
     "DRmaxit", DRmaxit, "decompose", true, "mat", mat, ...
     "gammaC", gammaC, "gammaS", gammaS, ...
     "coefaccel", coefaccel, "sigaccel", sigaccel, ...
     "coefextra", coefextra, "sigextra", sigextra, ...
     "linesearch", linesearch, "plotLS", plotLS, ...
     "saveall", true, "verbose", false);
+obj(:, 4) = sum(O, 2);
+time(:, 4) = sum(T, 2);
 fprintf("elapsed time %.1f seconds\n", time(end, 4))
 
 %% compute metrics
@@ -136,6 +151,43 @@ for method = 1:length(methods)
     end
 end
 
+%% save elapsed times
+resultsNames = {'p', 'N', 'theta', 'iterations', 'lambdaC', 'lambdaS', ...
+                 'simulate', 'plottime', 'segmentation', 'coefextra', ...
+                 'sigextra', 'coefaccel', 'sigaccel', 'linesearch', ...
+                 'plotLS', 'gammaC', 'gammaS', 'DRmaxit', ...
+                 'time', 'obj', 'SDRs', 'relatives'};
+resultsValues = {p, N, theta, iterations, lambdaC, lambdaS, ...
+                  simulate, plottime, segmentation, coefextra, ...
+                  sigextra, coefaccel, sigaccel, linesearch, ...
+                  plotLS, gammaC, gammaS, DRmaxit, ...
+                  time, obj, SDRs, relatives};
+resultsTable = array2table(resultsValues, 'VariableNames', resultsNames);
+methodsTable = struct;
+for method = 1:length(methods)
+    modname = strrep(methods(method), ' ', '_');
+    methodValues = {p, N, theta, iterations, lambdaC, lambdaS, ...
+                  simulate, plottime, segmentation, coefextra, ...
+                  sigextra, coefaccel, sigaccel, linesearch, ...
+                  plotLS, gammaC, gammaS, DRmaxit, ...
+                  time(end, method), obj(end, method), SDRs(end, method), relatives(end, method)};
+    methodsTable.(modname) = array2table(methodValues, 'VariableNames', resultsNames);
+end
+if isfile("results/demo_times.mat")
+    D = load("results/demo_times.mat");
+    D.resultsTable = sortrows([D.resultsTable; resultsTable], 1:18);
+    for method = 1:length(methods)
+        modname = strrep(methods(method), ' ', '_');
+        D.methodsTable.(modname) = sortrows([D.methodsTable.(modname); methodsTable.(modname)], 1:18);
+    end
+    if savetimes
+        save("results/demo_times.mat", "-struct", "D")
+    end
+elseif savetiemes
+    save("results/demo_times.mat", "resultsTable", "methodsTable")
+end
+
+
 %% plot
 figure
 tiledlayout(2, 3)
@@ -149,7 +201,7 @@ if plottime
     xaxis = time;
     xstr = "time (s)";
 else
-    xaxis = repmat((1:iterations)', [1, 4]);
+    xaxis = repmat((1:iterations)', [1, length(methods)]);
     xstr = "iteration";
 end
 

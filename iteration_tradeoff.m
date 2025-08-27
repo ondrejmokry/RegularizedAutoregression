@@ -14,7 +14,7 @@ clc
 close all
 
 addpath('utils')
-filename = 'iteration_tradeoff_01';
+filename = 'iteration_tradeoff_02';
 
 %% set the parameters
 p       = 512;   % order of the AR process

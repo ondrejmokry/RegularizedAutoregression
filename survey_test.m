@@ -133,9 +133,9 @@ for i = 1:length(audio_files)
 
                     %% main algorithm
                     tic
-                    restored = segmentation(...
+                    restored = janssen(...
                         method{algo}, data_clipped, masks, [lambdaC(m), lambdaS(n)], p, 5, ... % model and main parameters
-                        'wtype', 'rect', 'w', w, 'a', w/2, ...                                 % overlap-add
+                        'segmentation', true, 'wtype', 'rect', 'w', w, 'a', w/2, ...           % overlap-add
                         'coefaccel', true, 'sigaccel', true, ...                               % acceleration
                         'DRmaxit', 1000, ...                                                   % inner iterations
                         'linesearch', false, ...                                               % liensearch

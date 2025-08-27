@@ -7,7 +7,7 @@ addpath(genpath(toolboxpath))
 addpath('utils')
 
 % name of the results file
-filename = 'survey_test';
+filename = 'survey_test_rect';
 
 % name of the waveform directory
 directory = ['results/', filename];

@@ -17,8 +17,8 @@ addpath('utils')
 p        = 128;  % order of the AR process 
 N        = 2048; % length of the signal
 theta    = 0.2;  % threshold of the hard clipping
-lambda   = [1, Inf]; % regularization parameters (AR coefficients, signal)
-savedata = true;
+lambda   = [0.1, Inf]; % regularization parameters (AR coefficients, signal)
+savedata = false;
 simulate = true;
 
 % construction of the matrix AA or XX in the subproblems
@@ -348,29 +348,26 @@ function [coef, objective] = getcoef(signal, p, lambda)
     X  = toeplitz([signal; zeros(p, 1)], [signal(1), zeros(1, p)]);
     XX = X'*X;
 
-    % Douglas-Rachford
-    DR.lambda = 1;
-    DR.gamma  = 10;
-    DR.y0     = lpc(signal, p)';
-    DR.maxit  = 1000;
-    DR.tol    = -Inf;
-    DR.dim    = p+1;
-
     % the function g
-    DR.g      = @(a) lambda*norm(a, 1);
-    soft      = @(a, t) sign(a).*max(abs(a)-t, 0);
-    DR.prox_g = @(a, t) [1; soft(a(2:end), lambda*t)]; 
+    g      = @(a) lambda*norm(a, 1);
+    soft   = @(a, t) sign(a).*max(abs(a)-t, 0);
+    prox_g = @(a, t) [1; soft(a(2:end), lambda*t)]; 
 
     % the function f
-    DR.f      = @(a) 0.5*norm(X*a)^2;
-    invmat    = inv(eye(p+1) + DR.gamma*XX);
-    DR.prox_f = @(a, t) invmat*a; %#ok<MINV>
+    gamma  = 10;
+    f      = @(a) 0.5*norm(X*a)^2;
+    invmat = inv(eye(p+1) + gamma*XX);
+    prox_f = @(a, t) invmat*a; %#ok<MINV>
 
     % solution
     if nargout > 1
-        [coef, objective] = DouglasRachford(DR, DR);
+        [coef, objective] = DouglasRachford(f, g, prox_f, prox_g, p+1, ...
+            "lambda", 1, "gamma", 10, "maxit", 1000, ...
+            "startpoint", lpc(signal, p)', "tol", -Inf);
     else
-        coef = DouglasRachford(DR, DR);
+        coef = DouglasRachford(f, g, prox_f, prox_g, p+1, ...
+            "lambda", 1, "gamma", gamma, "maxit", 1000, ...
+            "startpoint", lpc(signal, p)', "tol", -Inf);
     end
     
 end
@@ -405,23 +402,18 @@ function declipped = declip(clipped, masks, coef)
     % prepare the matrix A
     A  = toeplitz([coef; zeros(N-1, 1)], [coef(1), zeros(1, N-1)]);
     AA = A'*A;
-    
-    % set the parameters of the algorithm
-    DR.lambda = 1;
-    DR.gamma  = 10;
-    DR.y0     = clipped;
-    DR.maxit  = 2000;
-    DR.tol    = -Inf;
 
     % precompute the inversion
-    invmat = inv(eye(N) + DR.gamma*AA);
+    gamma = 10;
+    invmat = inv(eye(N) + gamma*AA);
 
     % set the parameters of the model
-    DR.prox_f = @(x, t) invmat*x; %#ok<MINV>
-    DR.prox_g = @(x, t) proj(x); 
-    DR.dim    = N;
+    prox_f = @(x, t) invmat*x; %#ok<MINV>
+    prox_g = @(x, t) proj(x); 
 
     % solve the task
-    declipped = DouglasRachford(DR, DR);
+    declipped = DouglasRachford(@(x) 0, @(x) 0, prox_f, prox_g, N, ...
+            "lambda", 1, "gamma", gamma, "maxit", 2000, ...
+            "startpoint", clipped, "tol", -Inf);
 
 end
