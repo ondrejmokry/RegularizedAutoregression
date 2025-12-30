@@ -2,9 +2,7 @@
 layout: default
 ---
 
-<p>This is the accompanying page for the article <em>Regularized autoregressive modeling and its application to audio signal reconstruction</em> authored by Ondřej Mokrý and Pavel Rajmic, submitted to IEEE/ACM Transactions on Audio, Speech, and Language Processing.</p>
 <blockquote>
-<p>Autoregressive (AR) modeling is invaluable in signal processing, in particular in speech and audio fields. Attempts in the literature can be found that regularize or constrain either the time-domain signal values or the AR coefficients, which is done for various reasons, including the incorporation of prior information or numerical stabilization. Although these attempts are appealing, an encompassing and generic modeling framework is still missing. We propose such a framework and the related optimization problem and algorithm. We discuss the computational demands of the algorithm and explore the effects of various improvements on its convergence speed. In the experimental part, we demonstrate the usefulness of our approach on the audio declipping and the audio dequantization problems. We compare its performance against the state-of-the-art methods and demonstrate the competitiveness of the proposed method, especially for mildly clipped signals. The evaluation is extended by considering a heuristic algorithm of generalized linear prediction (GLP), a strong competitor which has only been presented as a patent and is new in the scientific community.</p>
 </blockquote>
 <p>The preprint is available at <a href="https://arxiv.org/abs/2410.17790">arXiv</a>.</p>
 
@@ -28,14 +26,103 @@ layout: default
 
 <img src="figures/sloupecky_sdr.svg">
 
+<p>
+The Wilcoxon signed-rank test was conducted to assess significance of the differences between the methods. We have used the implementation available in MATLAB:
+<a href=https://www.mathworks.com/help/stats/signrank.html>[p, h] = signrank(x,y)</a> returns the p-value of a paired, two-sided test for the null hypothesis that <i>x</i> – <i>y</i> comes from a distribution with zero median.
+<ul>
+    <li>h = 1 indicates a rejection of the null hypothesis,</li>
+    <li>h = 0 indicates a failure to reject the null hypothesis at the 5% significance level.</li>
+</ul>
+</p>
+
+<p>
+In words, simplified:
+<i>p</i> < 0.05 → <i>h</i> = 1 → null hypothesis rejected → <i>x</i> > <i>y</i>.
+In the presented visualizations, <i>x</i> and <i>y</i> represent the methods on the vertical and horizontal axes, respectively.
+</p>
+
+<p><button id="tlacitko_wilcoxon_sdr" class="cudlik">Show results of the Wilcoxon test using SDR values</button></p>
+
+<script>
+    const wilcoxon_button_sdr = document.getElementById("tlacitko_wilcoxon_sdr");
+    let wilcoxon_shown_sdr = false;
+    wilcoxon_button_sdr.addEventListener("click", function() {
+        if (wilcoxon_shown_sdr == false) {
+            wilcoxon_button_sdr.className = "clicked";
+            wilcoxon_shown_sdr = true;
+            document.getElementById("scroll_sdr").style.display = "block";
+        } else {
+            wilcoxon_button_sdr.className = "cudlik";
+            wilcoxon_shown_sdr = false;
+            document.getElementById("scroll_sdr").style.display = "none";
+        }
+    });
+</script>
+
+<div id="scroll_sdr" class="scroll-container" style="display: none">
+    <img src="figures/sdr_05_dB.svg" alt="5 dB, SDR" style="width:75%">
+    <img src="figures/sdr_07_dB.svg" alt="7 dB, SDR" style="width:75%">
+    <img src="figures/sdr_10_dB.svg" alt="10 dB, SDR" style="width:75%">
+    <img src="figures/sdr_15_dB.svg" alt="15 dB, SDR" style="width:75%">
+</div> 
+
 <h2>Comparison in terms of PEMO-Q ODG</h2>
 
 <img src="figures/sloupecky_pemoq.svg">
+
+<p><button id="tlacitko_wilcoxon_pemoq" class="cudlik">Show results of the Wilcoxon test using PEMO-Q values</button></p>
+
+<script>
+    const wilcoxon_button_pemoq = document.getElementById("tlacitko_wilcoxon_pemoq");
+    let wilcoxon_shown_pemoq = false;
+    wilcoxon_button_pemoq.addEventListener("click", function() {
+        if (wilcoxon_shown_pemoq == false) {
+            wilcoxon_button_pemoq.className = "clicked";
+            wilcoxon_shown_pemoq = true;
+            document.getElementById("scroll_pemoq").style.display = "block";
+        } else {
+            wilcoxon_button_pemoq.className = "cudlik";
+            wilcoxon_shown_pemoq = false;
+            document.getElementById("scroll_pemoq").style.display = "none";
+        }
+    });
+</script>
+
+<div id="scroll_pemoq" class="scroll-container" style="display: none">
+    <img src="figures/pemoq_05_dB.svg" alt="5 dB, PEMO-Q" style="width:75%">
+    <img src="figures/pemoq_07_dB.svg" alt="7 dB, PEMO-Q" style="width:75%">
+    <img src="figures/pemoq_10_dB.svg" alt="10 dB, PEMO-Q" style="width:75%">
+    <img src="figures/pemoq_15_dB.svg" alt="15 dB, PEMO-Q" style="width:75%">
+</div> 
 
 <h2>Comparison in terms of PEAQ ODG</h2>
 
 <img src="figures/sloupecky_peaq.svg">
 
+<p><button id="tlacitko_wilcoxon_peaq" class="cudlik">Show results of the Wilcoxon test using PEAQ values</button></p>
+
+<script>
+    const wilcoxon_button_peaq = document.getElementById("tlacitko_wilcoxon_peaq");
+    let wilcoxon_shown_peaq = false;
+    wilcoxon_button_peaq.addEventListener("click", function() {
+        if (wilcoxon_shown_peaq == false) {
+            wilcoxon_button_peaq.className = "clicked";
+            wilcoxon_shown_peaq = true;
+            document.getElementById("scroll_peaq").style.display = "block";
+        } else {
+            wilcoxon_button_peaq.className = "cudlik";
+            wilcoxon_shown_peaq = false;
+            document.getElementById("scroll_peaq").style.display = "none";
+        }
+    });
+</script>
+
+<div id="scroll_peaq" class="scroll-container" style="display: none">
+    <img src="figures/peaq_05_dB.svg" alt="5 dB, PEAQ" style="width:75%">
+    <img src="figures/peaq_07_dB.svg" alt="7 dB, PEAQ" style="width:75%">
+    <img src="figures/peaq_10_dB.svg" alt="10 dB, PEAQ" style="width:75%">
+    <img src="figures/peaq_15_dB.svg" alt="15 dB, PEAQ" style="width:75%">
+</div> 
 
 <h1>Audio examples</h1>
 

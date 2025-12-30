@@ -6,6 +6,17 @@ table {
   margin: 15px;
 }
 
+div.scroll-container {
+  background-color: #ffffff;
+  overflow: auto;
+  white-space: nowrap;
+  padding: 10px;
+}
+
+div.scroll-container img {
+  padding: 10px;
+}
+
 .clicked {
   display: inline-block;
   margin-bottom: 0rem;
