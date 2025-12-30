@@ -18,7 +18,8 @@ It is organized as follows:
 - **dequantization toolbox** – clone of the repository [audio_dequantization](https://github.com/zawi01/audio_dequantization)
 - **docs** – source files for the accompanying webpage
 - **results** – numerical results of the experiments presented in the paper, as well as the scripts used to plot the results
-- **signals** – audio signals used in the experiments which do not use the full set from **survey toolbox**
+- **signals** – music audio signals used in the experiments which do not use the full set from **survey toolbox**
+- **speech** – speech signals used in the experiments
 - **survey toolbox** – clone of selected parts of the repository [declipping2020_codes](https://github.com/rajmic/declipping2020_codes), which is used for comparison of the proposed method with the state-of-the-art optimization-based audio declipping methods
 - **utils** – all the functions implementing the proposed framework and functions used by the plotting scripts in **results**
 
@@ -27,18 +28,23 @@ It is organized as follows:
 - `consistency_test.m` analyzes the results in terms of performance and consistency; note that this code *cannot* be run without first running `survey_test.m` and generating all the declipped waveforms
 - `demo.m` is a demonstrative script which runs a single instance of the declipping experiment using GLP and the proposed ACS approach
 - `demo_quant.m` is a demonstrative script which runs a single instance of the dequantization experiment using the proposed ACS approach
-- `dequantization_test.m`  performs the declipping experiment from the article [Audio Dequantization Using (Co)Sparse (Non)Convex Methods](https://ieeexplore.ieee.org/document/9414637) using the proposed ACS approach
+- `demo_speech.m` is a demonstrative script which runs a single instance of the speech declipping experiment using the proposed ACS approach
+- `dequantization_test.m`  performs the dequantization experiment from the article [Audio Dequantization Using (Co)Sparse (Non)Convex Methods](https://ieeexplore.ieee.org/document/9414637) using the proposed ACS approach
 - `iteration_tradeoff.m` tests the proposed method for different combinations of the ACS (outer) and DRA (inner) iterations
+- `main_csl1_speech.m`, `main_Social_Sparsity_speech.m`, `main_spade_speech.m` are minor modifications of the sripts from **survey toolbox** for the sake of the speech experiment
 - `oracle_test.m` tests the inpainting / declipping using Janssen algorithm or GLP and compares the progression of AR coefficients to the coefficients of the ground truth signal
+- `speech_test.m` performs the speech declipping experiment inspired by the article [A Survey and an Extensive Evaluation of Popular Audio Declipping Methods](https://ieeexplore.ieee.org/document/9281027) using the proposed ACS approach and GLP
+- `speech_test_add_metrics.m`computes the STOI, MOS and NSIM metrics for the declipped speech signals; note that this code *cannot* be run without first running `speech_test.m`, `main_csl1_speech.m`, `main_Social_Sparsity_speech.m`, and `main_spade_speech.m` to generate all the declipped waveforms
 - `survey_test.m` performs the declipping experiment from the article [A Survey and an Extensive Evaluation of Popular Audio Declipping Methods](https://ieeexplore.ieee.org/document/9281027) using the proposed ACS approach and GLP
-- `survey_test_add_CR.m` performs the post-processing of the results from `survey_test.m` as described in the article [Audio Declipping Performance Enhancement via Crossfading](https://www.sciencedirect.com/science/article/pii/S0165168421004023); note that this code *cannot* be run without first running `survey_test.m` and generating all the declipped waveforms
+- `survey_test_add_CR.m` performs the post-processing of the results from `survey_test.m` as described in the article [Audio Declipping Performance Enhancement via Crossfading](https://www.sciencedirect.com/science/article/pii/S0165168421004023); note that this code *cannot* be run without first running `survey_test.m` to generate all the declipped waveforms
 
 ## Dependencies
 
 The codes were tested in MATLAB R2025a. They depend on the following toolboxes:
 - Parallel Computing Toolbox,
 - Signal Processing Toolbox,
-- Statistics and Machine Learning Toolbox.
+- Statistics and Machine Learning Toolbox,
+- [The Large Time-Frequency Analysis Toolbox (LTFAT)](https://ltfat.org/).
 
 ## Acknowledgment
 
