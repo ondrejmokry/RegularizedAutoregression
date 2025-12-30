@@ -9,48 +9,76 @@ addpath('../utils')
 plotmean = true;
 plotindividual = false; % not compatible with plotting time
 plotbootstrap = false;
-plotmetrics = 1:4; % 1: SDR, 2: PEMO-Q ODG, 3: PEAQ ODG, 4: time
+plotwilcoxon = false;
+plotmetrics = 1:4;
+% 1: SDR
+% 2: PEMO-Q ODG  (only for music)
+% 3: PEAQ ODG    (only for music)
+% 4: time        (only for music)
+% 5: STOI        (only for speech)
+% 6: ViSQOL MOS  (only for speech)
+% 7: ViSQOL NSIM (only for speech)
+
+% prepare title
+titles = { ...
+    '$\Delta$SDR (dB)', ...
+    'PEMO-Q ODG', ...
+    'PEAQ ODG', ...
+    'elapsed time per second of audio (s)', ...
+    'STOI', ...
+    'ViSQOL MOS', ...
+    'ViSQOL NSIM' ...
+};
 
 % bootstrap settings
 alpha = 0.05;
 draws = 1000;
-
-% the audio signals to choose from
-audio_files = { 'a08_violin', ...
-                'a16_clarinet', ...
-                'a18_bassoon', ...
-                'a25_harp', ...
-                'a35_glockenspiel', ...
-                'a41_celesta', ...
-                'a42_accordion', ...
-                'a58_guitar_sarasate', ...
-                'a60_piano_schubert', ...
-                'a66_wind_ensemble_stravinsky' };
-nofiles = length(audio_files);
            
 %% load the data
-filename = 'survey_test_rect_CR.mat';
+filename = 'survey_test_rect.mat';
+% filename = 'speech_test.mat';
 load(filename)
+nofiles = length(audio_files);
 
 %% reference algorithms
 % available options
-dec_algos = { 'consOMP', ...       % 1
-              'aspade', ...        % 2
-              'sspade_new', ...    % 3
-              'CP', ...            % 4
-              'DR', ...            % 5
-              'SS_EW', ...         % 6
-              'SS_PEW', ...        % 7
-              'csl1', ...          % 8
-              'pcsl1', ...         % 9
-              'pwcsl1', ...        % 10
-              'reweighted_CP', ... % 11
-              'reweighted_DR', ... % 12
-              'CP_parabola', ...   % 13
-              'DR_parabola', ...   % 14
-              'DL', ...            % 15
-              'NMF'...            % 16
-              };
+dec_algos = { ...
+    'consOMP', ...       % 1
+    'aspade', ...        % 2
+    'sspade_new', ...    % 3
+    'CP', ...            % 4
+    'DR', ...            % 5
+    'SS_EW', ...         % 6
+    'SS_PEW', ...        % 7
+    'csl1', ...          % 8
+    'pcsl1', ...         % 9
+    'pwcsl1', ...        % 10
+    'reweighted_CP', ... % 11
+    'reweighted_DR', ... % 12
+    'CP_parabola', ...   % 13
+    'DR_parabola', ...   % 14
+    'DL', ...            % 15
+    'NMF'...             % 16
+};
+
+dec_names = { ...
+    'C-OMP', ...         % 1
+    'A-SPADE', ...       % 2
+    'S-SPADE', ...       % 3
+    'CP', ...            % 4
+    'DR', ...            % 5
+    'SS EW', ...         % 6
+    'SS PEW', ...        % 7
+    'CSL1', ...          % 8
+    'PCSL1', ...         % 9
+    'PWCSL1', ...        % 10
+    'reweighted CP', ... % 11
+    'reweighted DR', ... % 12
+    'CP parabola', ...   % 13
+    'DR parabola', ...   % 14
+    'DL', ...            % 15
+    'NMF' ...            % 16
+};
 
 % per each input SDR, choose the reference algorithms
 % references = { [ 2, 3, 7 ], ... % 5 dB
@@ -58,8 +86,12 @@ dec_algos = { 'consOMP', ...       % 1
 %                [ 7, 13, 16 ], ... % 10 dB
 %                [ 7, 13, 16 ], ... % 15 dB
 %                };
-           
-references = 1:16;
+
+if contains(filename, 'speech')
+    references = [2, 7, 8];
+else
+    references = 1:16;
+end
            
 % find the unique references
 if iscell(references)
@@ -82,34 +114,36 @@ counter = 0;
 % inpainting
 for i = 1:num_inp
     counter = counter + 1;
-    legstr{counter} = ['inp, $\lambda_1$ = ', num2str(lambdaC(i))];
+    legstr{counter} = ['inp., $\lambda_\mathrm{C}$ = ', lambda2str(lambdaC(i))];
 end
 
 % glp
 for i = 1:num_glp
     counter = counter + 1;
-    legstr{counter} = ['glp, $\lambda_1$ = ', num2str(lambdaC(i))];
+    legstr{counter} = ['GLP, $\lambda_\mathrm{C}$ = ', lambda2str(lambdaC(i))];
 end
 
 % declipping
 for i = 1:length(lambdaS)
     for j = 1:length(lambdaC)
         counter = counter + 1;
-        legstr{counter} = ['dec, $\lambda_1$ = ', num2str(lambdaC(j)), ', $\lambda_2$ = ', num2str(lambdaS(i))];
+        legstr{counter} = ['dec., $\lambda_\mathrm{C}$ = ', lambda2str(lambdaC(j)), ', $\lambda_\mathrm{S}$ = ', lambda2str(lambdaS(i))];
     end
 end
 
 % references
 for i = 1:num_ref
     counter = counter + 1;
-    legstr{counter} = strrep(dec_algos{unique_refs(i)}, '_', ' ');
+    legstr{counter} = dec_names{unique_refs(i)};
 end
 
 %% prepare colors
-mapcolors = turbo(num_ref);
-mapcolors = [mapcolors(1:length(lambdaS)+2, :); mapcolors];
+mapcolors = turbo(max(num_ref, length(lambdaS)+2));
+mapcolors = [mapcolors(1:length(lambdaS)+2, :); mapcolors(1:num_ref, :)];
 colors = zeros(num_tot, 3);
-colors(num_inp + num_glp + num_dec + 1:end, :) = mapcolors(length(lambdaS)+3:end, :);
+if num_ref > 0
+    colors(num_inp + num_glp + num_dec + 1:end, :) = mapcolors(length(lambdaS)+3:end, :);
+end
 for i = 1:length(lambdaC)
     frac = i/length(lambdaC);
 
@@ -125,24 +159,27 @@ for i = 1:length(lambdaC)
     end
 end
 
+if contains(filename, 'speech') 
+    load('../utils/barcolors.mat')
+end
+
 %% plot mean from all signals
 fcnt = 0; % figure counter
 if plotmean
     for metric = plotmetrics
 
         % initialize plotdata (the mean values)
-        plotdata = NaN(length(input_SDRs), num_tot);
+        plotdata = NaN(length(audio_files), length(input_SDRs), num_tot);
         
-        % initialize the bootstrap estimates
-        plotlower = NaN(length(input_SDRs), num_tot);
-        plotupper = NaN(length(input_SDRs), num_tot);
-
         % switch metric (what a surprise)
-        switch metric
-            case 1, field = 'SDRs';   reflabel = 'dSDR_all'; base = 0;
-            case 2, field = 'PEMOQs'; reflabel = 'PEMO_Q';   base = -4;
-            case 3, field = 'PEAQs';  reflabel = 'PEAQ';     base = -4;
-            case 4, field = 'times';  reflabel = '';         base = 0.01;
+         switch metric
+            case 1, field = 'SDRs';   reflabel = 'dSDR_all'; base = 0;     ylims = [-1, Inf];
+            case 2, field = 'PEMOQs'; reflabel = 'PEMO_Q';   base = -4;    ylims = [-4, 0];
+            case 3, field = 'PEAQs';  reflabel = 'PEAQ';     base = -4;    ylims = [-4, 0];
+            case 4, field = 'times';  reflabel = '';         base = 0.01;  ylims = [1, 600];
+            case 5, field = 'STOIs';  reflabel = 'STOI';     base = 0;     ylims = [0, 1];
+            case 6, field = 'MOSs';   reflabel = 'MOS';      base = 1;     ylims = [1, 5];
+            case 7, field = 'NSIMs';  reflabel = 'NSIM';     base = 0;     ylims = [0, 1];
         end
 
         % read the inpainting + glp + declipping data
@@ -173,39 +210,21 @@ if plotmean
                 end
             end
 
-            % compute the mean values and the confidence intervals
-            if plotbootstrap
-                [data, lower, upper] = bootstrap_est(data, alpha=alpha, draws=draws);
-            else
-                [data, lower, upper] = bootstrap_est(data, alpha=alpha, draws=1);
-            end
-            data  = squeeze(data);
-            lower = squeeze(lower);
-            upper = squeeze(upper);
-
             % save to plotdata
             switch method
                 case 1
                     for i = 1:num_inp
-                        plotdata(:, i)  = data(:, i);
-                        plotlower(:, i) = lower(:, i);
-                        plotupper(:, i) = upper(:, i);
+                        plotdata(:, :, i)  = data(:, :, i);
                     end
                 case 2
                     for i = 1:num_glp
-                        plotdata(:, num_inp + i)  = data(:, i);
-                        plotlower(:, num_inp + i) = lower(:, i);
-                        plotupper(:, num_inp + i) = upper(:, i);
+                        plotdata(:, :, num_inp + i)  = data(:, :, i);
                     end
                 case 3
                     for i = 1:length(lambdaS)
                         for j = 1:length(lambdaC)
-                            plotdata(:, num_inp + num_glp + (i-1)*length(lambdaC) + j)...
-                                = data(:, j, i);
-                            plotlower(:, num_inp + num_glp + (i-1)*length(lambdaC) + j)...
-                                = lower(:, j, i);
-                            plotupper(:, num_inp + num_glp + (i-1)*length(lambdaC) + j)...
-                                = upper(:, j, i);
+                            plotdata(:, :, num_inp + num_glp + (i-1)*length(lambdaC) + j)...
+                                = data(:, :, j, i);
                         end
                     end
             end
@@ -215,29 +234,122 @@ if plotmean
         for i = 1:length(input_SDRs)
             for j = 1:num_ref
                 if metric == 4 % elapsed times
-                    plotdata(i, num_inp + num_glp + num_dec + j)  = 0;
-                    plotlower(i, num_inp + num_glp + num_dec + j) = 0;
-                    plotupper(i, num_inp + num_glp + num_dec + j) = 0;
+                    plotdata(:, i, num_inp + num_glp + num_dec + j)  = 0;
                 else
 
                     if contains(filename, '_RR')
                         refdata = load(['../survey toolbox/Numerical_results/', reflabel, '_declippingResults_RR.mat']);
                         refdata = refdata.([reflabel, '_', dec_algos{unique_refs(j)}, '_RR']);
+                    elseif contains(filename, 'speech')
+                        refdata = load(['../survey toolbox/Numerical_results/', reflabel, '_declippingResults_speech.mat']);
+                        refdata = refdata.([reflabel, '_', dec_algos{unique_refs(j)}]);
                     else
                         refdata = load(['../survey toolbox/Numerical_results/', reflabel, '_declippingResults.mat']);
                         refdata = refdata.([reflabel, '_', dec_algos{unique_refs(j)}]);
                     end
+                        
                     
-                    [refdata, reflower, refupper] = bootstrap_est(refdata, alpha=alpha, draws=draws);
-    
-                    % the index for refdata needs to be shifted, because
-                    % the input SDRs of 1 dB and 3 dB were omitted in the
-                    % test
-                    plotdata(i, num_inp + num_glp + num_dec + j)  = refdata(2+i);
-                    plotlower(i, num_inp + num_glp + num_dec + j) = reflower(2+i);
-                    plotupper(i, num_inp + num_glp + num_dec + j) = refupper(2+i);
+                    if contains(filename, 'speech')
+                        plotdata(:, i, num_inp + num_glp + num_dec + j)  = refdata(:, i);
+                    else
+                        % the index for refdata needs to be shifted, 
+                        % because the input SDRs of 1 dB and 3 dB were 
+                        % omitted in the test
+                        plotdata(:, i, num_inp + num_glp + num_dec + j)  = refdata(:, 2+i);
+                    end
                 end
             end
+        end
+
+        if plotwilcoxon 
+            % [p, h] = signrank(x,y) returns the p-value of a paired, two-sided test 
+            % for the null hypothesis that x – y comes from a distribution with zero 
+            % median.
+            % h = 1 indicates a rejection of the null hypothesis, and h = 0 indicates
+            % a failure to reject the null hypothesis at the 5% significance level.
+            % In words, simplified:
+            % p < 0.05 → h = 1 → null hypothesis rejected → x > y
+            P = zeros(length(input_SDRs), num_tot, num_tot);
+            H = zeros(length(input_SDRs), num_tot, num_tot);
+            for inputSDR = 1:length(input_SDRs)
+                for i = 1:num_tot
+                    for j = 1:num_tot
+                        [P(inputSDR, i, j), H(inputSDR, i, j)] = signrank(plotdata(:, inputSDR, i), plotdata(:, inputSDR, j), tail='right');
+                    end
+                end
+            end
+            
+            % custom colormap
+            numcolors = 256;
+            cmin = 0.001;
+            cmax = 1;
+            [~, bpt] = min(abs(logspace(log10(cmin), log10(cmax), numcolors)-0.05));
+            bpt = min(max(bpt, 1), numcolors);
+            rest = numcolors - bpt;
+            niceblue = [0.27691, 0.44145, 0.91328];
+            nicered = [0.83926, 0.20654, 0.02305];
+            % r = [(0:bpt-1)'/max(bpt-1, 1); ones(rest, 1)];
+            % g = [(0:bpt-1)'/max(bpt-1, 1); ((rest-1):-1:0)'/max(rest-1, 1)];
+            % b = [ones(bpt, 1); ((rest-1):-1:0)'/max(rest-1, 1)];
+            % custommap = [r g b];
+            custommap = [ ...
+                % blue part (below the breakpoint)
+                0.1 + (0.5 + 0.4*(0:bpt-1)'/max(bpt-1, 1)) .* niceblue;
+                % red part (above the breakpoint)
+                0.1 + (0.5 + 0.4*(0:(rest-1))'/max(rest-1, 1)) .* nicered;
+            ];
+            for inputSDR = 1:length(input_SDRs)
+                fcnt = fcnt + 1;
+                figs(fcnt) = figure( ...
+                    'visible', 'off', ...
+                    'Name', [lower(field(1:end-1)), '_', num2str(input_SDRs(inputSDR), '%02d'), '_dB']); %#ok<SAGROW>
+                imagedata = squeeze(log10(P(inputSDR,:,:)));
+                imagesc(imagedata)
+                axis square
+                clim([log10(cmin), log10(cmax)])
+                colormap(gca, custommap)
+                cbr = colorbar;
+                cbr.Label.String = 'p-value';
+                cbr.Label.Interpreter = 'latex';
+                cbr.Ticks = sort([log10(cmin):log10(cmax), log10(0.05)]);
+                cbr.TickLabels = {'0.001', '0.01', '0.05', '0.1', '1'};
+                set(gca, 'XTick', 1:num_tot, 'YTick', 1:num_tot, 'XTickLabel', legstr, 'YTickLabel', legstr)
+                title(titles{metric}, sprintf('input SDR %d dB', input_SDRs(inputSDR)), 'Interpreter', 'latex')
+    
+                % nexttile
+                % imagesc(squeeze(H(inputSDR,:,:)));
+                % axis square
+                % colormap(gca, 'gray')
+                % cbr = colorbar;
+                % cbr.Label.String = 'null hypothesis rejection';
+                % cbr.Label.Interpreter = 'latex';
+                % cbr.Ticks = [0, 1];
+                % cbr.TickLabels = {'false', 'true'};
+                % set(gca, 'XTick', 1:num_tot, 'YTick', 1:num_tot, 'XTickLabel', legstr, 'YTickLabel', legstr)
+            end
+        end
+
+        % saving custom stuff with matlab2tikz:
+        % (1) make sure that the following variables are set properly:
+        %     (a) cmin (in our case, the actual limit are log10(cmin))
+        %     (b) cmax (in our case, the actual limit are log10(cmax))
+        %     (c) imagedata
+        %     (d) custommap
+        % (2) save as usual:
+        %     matlab2tikz("filename.tex")
+        % (3) change manually the colormap, use the following string:
+        %     cmapstring = "";
+        %     for i = 0:255
+        %         cmapstring = cmapstring + sprintf("rgb(%dpt)=(%.4f,%.4f,%.4f); ", i, custommap(i+1,1), custommap(i+1,2), custommap(i+1,3));
+        %     end
+        % (4) replace the PNG with the following file:
+        %     imwrite(gray2ind(mat2gray(imagedata,[cmin cmax]), 256), custommap, "filename.png")
+
+        % compute the mean values and the confidence intervals
+        if plotbootstrap
+            [plotdata, plotlower, plotupper] = bootstrap_est(plotdata, alpha=alpha, draws=draws);
+        else
+            [plotdata, plotlower, plotupper] = bootstrap_est(plotdata, alpha=alpha, draws=1);
         end
 
         % if metric == 4
@@ -248,7 +360,9 @@ if plotmean
 
         % plot the bars
         fcnt = fcnt + 1;
-        figs(fcnt) = figure('visible', 'off'); %#ok<SAGROW>
+        figs(fcnt) = figure( ...
+            'visible', 'off', ...
+            'Name', ['sloupecky_', lower(field(1:end-1))]);
         b = bar(plotdata, 'BaseValue', base);
 
         % add shaded regions
@@ -270,16 +384,21 @@ if plotmean
         set(gca, 'yminorgrid', 'on')
         xlabel('input SDR (dB)')
         xlim([0.5, 4.5])
-        if metric == 1
-            ylim([-1, 22])
-        elseif metric == 4
+        ylim(ylims)
+        if metric == 4
             set(gca, 'yscale', 'log')
-            ylim([1, 600])
-        else
-            ylim([-4, 0])
         end
         for i = 1:size(plotdata, 2)
-            b(i).FaceColor = colors(i, :);
+            if i <= num_inp + num_glp + num_dec
+                b(i).FaceColor = colors(i, :);
+            else
+                shift = num_inp + num_glp + num_dec;
+                b(i).FaceColor = colors(shift + unique_refs(i-shift), :);
+            end
+            
+            % check the colors
+            % fprintf('%.5f  ', b(i).FaceColor)
+            % disp(legstr{i})
         end
                 
         % plot the confidence intervals
@@ -297,12 +416,7 @@ if plotmean
         legend(b, legstr, 'location', 'eastoutside')
         
         % add title
-        switch metric
-            case 1, title('$\Delta$SDR (dB)', 'mean from all signals')
-            case 2, title('PEMO-Q ODG', 'mean from all signals')
-            case 3, title('PEAQ ODG', 'mean from all signals')
-            case 4, title('elapsed time per second of audio (s)', 'mean from all signals')
-        end
+        title(titles{metric}, 'mean from all signals')
     end
 end
 
@@ -316,6 +430,9 @@ if plotindividual
     end
     
     for metric = plotmetrics
+        if metric == 4
+            continue
+        end
         for inputSDR = 1:length(input_SDRs)
 
             % initialize plotdata
@@ -323,9 +440,13 @@ if plotindividual
 
             % switch metric (what a surprise)
             switch metric
-                case 1, field = 'SDRs';   reflabel = 'dSDR_all';
-                case 2, field = 'PEMOQs'; reflabel = 'PEMO_Q';
-                case 3, field = 'PEAQs';  reflabel = 'PEAQ';
+                case 1, field = 'SDRs';   reflabel = 'dSDR_all'; base = 0;     ylims = [-1, Inf];
+                case 2, field = 'PEMOQs'; reflabel = 'PEMO_Q';   base = -4;    ylims = [-4, 0];
+                case 3, field = 'PEAQs';  reflabel = 'PEAQ';     base = -4;    ylims = [-4, 0];
+                case 4, field = 'times';  reflabel = '';         base = 0.01;  ylims = [-Inf, Inf];
+                case 5, field = 'STOIs';  reflabel = 'STOI';     base = 0;     ylims = [0, 1];
+                case 6, field = 'MOSs';   reflabel = 'MOS';      base = 1;     ylims = [1, 5];
+                case 7, field = 'NSIMs';  reflabel = 'NSIM';     base = 0;     ylims = [0, 1];
             end
 
             % read the inpainting + glp + declipping data
@@ -398,11 +519,7 @@ if plotindividual
             set(gca, 'ygrid', 'on')
             set(gca, 'yminorgrid', 'on')
             xlabel('audio files')
-            if metric == 1
-                ylim([-1, Inf])
-            else
-                ylim([-Inf, 0])
-            end
+            ylim(ylims)
             for i = 1:size(plotdata, 2)
                 b(i).FaceColor = colors(i, :);
             end
@@ -418,4 +535,23 @@ end
 %% make the figures visible
 for f = figs
     set(f, 'WindowStyle', 'docked', 'Visible', 'on')
+end
+
+%% custom num2str
+function str = lambda2str(lambda)
+
+    switch lambda
+        case 0
+            str = '0';
+        case Inf
+            str = '$\infty$';
+        otherwise
+            exponent = log10(lambda);
+            if exponent == 1
+                str = '10';
+            else
+                str = ['$10^{', num2str(exponent), '}$'];
+            end
+    end
+
 end
