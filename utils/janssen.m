@@ -222,14 +222,14 @@ if strcmpi(wtype, 'rect')
     if segmentation
         gsyn = gabwin('hann', a, w, L);
         gsyn = fftshift(gsyn);
-        gsyn = normalize(gsyn, 'peak');
+        gsyn = gsyn / max(gsyn);
         gsyn = gsyn * (2 * a / w);
     else
         gsyn = gana;
     end
 else
     gana = gabwin(char(wtype), a, w, L);
-    gana = normalize(gana, 'peak'); % peak-normalization of the analysis window
+    gana = gana / max(gana);
     gana = fftshift(gana);
     gsyn = gabdual(gana, a, w)*w; % computing the synthesis window
 end
@@ -245,10 +245,14 @@ mR = true(w, S);
 mL = false(w, S);
 mU = false(w, S);
 for s = 1:S
-    % defining the indices of the current block
-    indices = 1 + (s-1)*a - floor(w/2) : (s-1)*a + ceil(w/2);
-    indices = 1 + mod(indices-1, L);
-    
+    if segmentation
+        % defining the indices of the current block
+        indices = 1 + (s-1)*a - floor(w/2) : (s-1)*a + ceil(w/2);
+        indices = 1 + mod(indices-1, L);
+    else
+        indices = 1:w;
+    end
+
     % defining the segment data and masks
     mdata(:, s) = data(indices) .* gana;
     if ~strcmpi(method, "dequantization")
@@ -640,8 +644,12 @@ end
 %% overlap-add
 restored = zeros(L, maxit);
 for s = 1:S
-    indices = 1 + (s-1)*a - floor(w/2) : (s-1)*a + ceil(w/2);
-    indices = 1 + mod(indices-1, L);
+    if segmentation
+        indices = 1 + (s-1)*a - floor(w/2) : (s-1)*a + ceil(w/2);
+        indices = 1 + mod(indices-1, L);
+    else
+        indices = 1:w;
+    end
     restored(indices, :) = restored(indices, :) + mrestored(:, :, s).*repmat(gsyn, 1, maxit);
 end
 
