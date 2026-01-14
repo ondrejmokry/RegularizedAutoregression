@@ -30,10 +30,10 @@ layout: default
 
 <p>
 The Wilcoxon signed-rank test was conducted to assess significance of the differences between the methods. We have used the implementation available in MATLAB:
-<a href=https://www.mathworks.com/help/stats/signrank.html>[p, h] = signrank(x,y)</a> returns the p-value of a paired, two-sided test for the null hypothesis that <i>x</i> – <i>y</i> comes from a distribution with zero median.
+<a href=https://www.mathworks.com/help/stats/signrank.html>[p, h] = signrank(x,y)</a> returns the <i>p</i>-value of a paired, two-sided test for the null hypothesis that <i>x</i> – <i>y</i> comes from a distribution with zero median.
 <ul>
-    <li>h = 1 indicates a rejection of the null hypothesis,</li>
-    <li>h = 0 indicates a failure to reject the null hypothesis at the 5% significance level.</li>
+    <li><i>h</i> = 1 indicates a rejection of the null hypothesis,</li>
+    <li><i>h</i> = 0 indicates a failure to reject the null hypothesis at the 5% significance level.</li>
 </ul>
 </p>
 
@@ -61,11 +61,20 @@ In the presented visualizations, <i>x</i> and <i>y</i> represent the methods on 
     });
 </script>
 
-<div id="scroll_sdr" class="scroll-container" style="display: none">
-    <img src="figures/sdr_05_dB.svg" alt="5 dB, SDR" style="width:75%">
-    <img src="figures/sdr_07_dB.svg" alt="7 dB, SDR" style="width:75%">
-    <img src="figures/sdr_10_dB.svg" alt="10 dB, SDR" style="width:75%">
-    <img src="figures/sdr_15_dB.svg" alt="15 dB, SDR" style="width:75%">
+<div id="scroll_sdr" style="display: none">
+    <div class="scroll-container">
+        <img src="figures/sdr_05_dB.svg" alt="5 dB, SDR" style="width:75%">
+        <img src="figures/sdr_07_dB.svg" alt="7 dB, SDR" style="width:75%">
+        <img src="figures/sdr_10_dB.svg" alt="10 dB, SDR" style="width:75%">
+        <img src="figures/sdr_15_dB.svg" alt="15 dB, SDR" style="width:75%">
+    </div>
+    <p><strong>Example interpretation:</strong></p>
+    <p>
+        input SDR 5 dB, 1st row, 2nd column: the <i>p</i>-value is approximately 0.005 < 0.05 (blue square), thus equality of medians is rejected.
+    </p>
+    <p>
+        There is enough statistical evidence to conclude that the median of the SDR values for the 1st method (inpainting, no regularisation) is greater than the median for the 2nd method (inpainting, coef. regularisation). 
+    </p>
 </div> 
 
 <h2>Comparison in terms of PEMO-Q ODG</h2>
@@ -90,11 +99,20 @@ In the presented visualizations, <i>x</i> and <i>y</i> represent the methods on 
     });
 </script>
 
-<div id="scroll_pemoq" class="scroll-container" style="display: none">
-    <img src="figures/pemoq_05_dB.svg" alt="5 dB, PEMO-Q" style="width:75%">
-    <img src="figures/pemoq_07_dB.svg" alt="7 dB, PEMO-Q" style="width:75%">
-    <img src="figures/pemoq_10_dB.svg" alt="10 dB, PEMO-Q" style="width:75%">
-    <img src="figures/pemoq_15_dB.svg" alt="15 dB, PEMO-Q" style="width:75%">
+<div id="scroll_pemoq" style="display: none">
+    <div class="scroll-container">
+        <img src="figures/pemoq_05_dB.svg" alt="5 dB, PEMO-Q" style="width:75%">
+        <img src="figures/pemoq_07_dB.svg" alt="7 dB, PEMO-Q" style="width:75%">
+        <img src="figures/pemoq_10_dB.svg" alt="10 dB, PEMO-Q" style="width:75%">
+        <img src="figures/pemoq_15_dB.svg" alt="15 dB, PEMO-Q" style="width:75%">
+    </div>
+    <p><strong>Example interpretation:</strong></p>
+    <p>
+        input SDR 5 dB, 1st row, 2nd column: the <i>p</i>-value is approximately 0.54 > 0.05 (red square), thus equality of medians is not rejected.
+    </p>
+    <p>
+        There is not enough statistical evidence to conclude that the median of the PEMO-Q ODG values for the 1st method (inpainting, no regularisation) is greater than the median for the 2nd method (inpainting, coef. regularisation). 
+    </p>
 </div> 
 
 <h2>Comparison in terms of PEAQ ODG</h2>
@@ -119,18 +137,27 @@ In the presented visualizations, <i>x</i> and <i>y</i> represent the methods on 
     });
 </script>
 
-<div id="scroll_peaq" class="scroll-container" style="display: none">
-    <img src="figures/peaq_05_dB.svg" alt="5 dB, PEAQ" style="width:75%">
-    <img src="figures/peaq_07_dB.svg" alt="7 dB, PEAQ" style="width:75%">
-    <img src="figures/peaq_10_dB.svg" alt="10 dB, PEAQ" style="width:75%">
-    <img src="figures/peaq_15_dB.svg" alt="15 dB, PEAQ" style="width:75%">
-</div> 
+<div id="scroll_peaq" style="display: none">
+    <div class="scroll-container">
+        <img src="figures/peaq_05_dB.svg" alt="5 dB, PEAQ" style="width:75%">
+        <img src="figures/peaq_07_dB.svg" alt="7 dB, PEAQ" style="width:75%">
+        <img src="figures/peaq_10_dB.svg" alt="10 dB, PEAQ" style="width:75%">
+        <img src="figures/peaq_15_dB.svg" alt="15 dB, PEAQ" style="width:75%">
+    </div>
+        <p><strong>Example interpretation:</strong></p>
+    <p>
+        input SDR 5 dB, 1st row, 2nd column: the <i>p</i>-value is approximately 0.001 < 0.05 (blue square), thus equality of medians is rejected.
+    </p>
+    <p>
+        There is enough statistical evidence to conclude that the median of the PEAQ ODG values for the 1st method (inpainting, no regularisation) is greater than the median for the 2nd method (inpainting, coef. regularisation). 
+    </p>
+</div>
 
 <h1>Audio examples</h1>
 
 <p>This section only includes the signals reconstructed using the AR-based methods discussed in the article (and without the “replace reliable” step).</p>
 
-<p>To listen to the references, please see the <a href="https://rajmic.github.io/declipping2020/">accompanying webpage</a> to <a href="#ref1">[1]</a> and <a href="#ref1">[2]</a>. Since the experiment protocol was identical, the examples are comparable.</p>
+<p>To listen to the reference reconstructions, please see the <a href="https://rajmic.github.io/declipping2020/">accompanying webpage</a> to <a href="#ref1">[1]</a> and <a href="#ref1">[2]</a>. Since the experiment protocol was identical, the examples are comparable.</p>
 
 <p>Please note that the differences between the individual reconstructions may be very subtle. There might be no audible clipping present in the reconstructed audio, only a subtle change in timbre. If you struggle to hear any differences, you can download the two WAV files that you want to compare and merge them in a single stereo file as separate (left/right) channels. This way, the differences become easier to recognize.</p>
 
